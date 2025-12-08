@@ -10,6 +10,7 @@ from __future__ import annotations
 
 from typing import Tuple
 import sys
+from pathlib import Path
 
 from PyQt5.QtCore import Qt, QSize, QTimer, QEvent
 from PyQt5.QtGui import QPainter, QColor, QPen
@@ -39,7 +40,7 @@ class VUMeter(QWidget):
             raise ValueError("segments must be > 0")
         self._segments = segments
         self._value = 0  # 0..255
-        self.setMinimumSize(QSize(120, 40))
+        self.setMinimumSize(QSize(240, 40))
         # precompute band mapping: first 5 green, next 3 yellow, last 2 red
         # this allows precise control over colors per LED
         self._bands = (['green'] * 5) + (['yellow'] * 3) + (['red'] * 2)
@@ -48,7 +49,7 @@ class VUMeter(QWidget):
         self._enabled = True
 
     def sizeHint(self) -> QSize:  # pragma: no cover - GUI helper
-        return QSize(200, 60)
+        return QSize(320, 80)
 
     def set_value(self, value: int) -> None:
         """Set meter value in 0..255 and refresh display."""
@@ -70,8 +71,8 @@ class VUMeter(QWidget):
         # horizontal layout: compute per-segment width and a small LED height
         available_w = w - 2 * margin
         gap = 4
-        seg_w = max(6, (available_w - (self._segments - 1) * gap) / self._segments)
-        led_h = max(6, min(14, h - 2 * margin))
+        seg_w = max(10, (available_w - (self._segments - 1) * gap) / self._segments)
+        led_h = max(8, min(20, h - 2 * margin))
         y = int((h - led_h) / 2)
         lit_count = int(round((self._value / 255.0) * self._segments))
 
@@ -269,6 +270,7 @@ class MainWindow(QMainWindow):
 
     def __init__(self) -> None:
         super().__init__()
+        self._config_path: Path | None = None
         self.setWindowTitle("PyMeter - VU Meter with TX/RX LEDs")
         central = QWidget()
         self.setCentralWidget(central)
@@ -394,6 +396,61 @@ class MainWindow(QMainWindow):
 
         self.resize(360, 100)
 
+    def load_config(self, path: str | Path) -> None:
+        """Load config from file path (KEY=VALUE lines). Creates default if missing."""
+        p = Path(path)
+        self._config_path = p
+        cfg = {}
+        if p.exists():
+            try:
+                for line in p.read_text().splitlines():
+                    line = line.strip()
+                    if not line or line.startswith('#'):
+                        continue
+                    if '=' in line:
+                        k, v = line.split('=', 1)
+                        cfg[k.strip()] = v.strip()
+            except Exception:
+                cfg = {}
+        else:
+            # create default
+            cfg['SIGNAL'] = 'Signal'
+            cfg['RIG'] = 'rig1'
+            try:
+                p.write_text('\n'.join(f"{k}={v}" for k, v in cfg.items()) + '\n')
+            except Exception:
+                pass
+        # apply to UI
+        try:
+            sig = cfg.get('SIGNAL', 'Signal')
+            if sig == 'Signal':
+                self.rb_signal.setChecked(True)
+            elif sig == 'Power':
+                self.rb_power.setChecked(True)
+            elif sig == 'SWR':
+                self.rb_swr.setChecked(True)
+            rig = cfg.get('RIG', 'rig1')
+            if rig == 'rig1':
+                self.rb_rig1.setChecked(True)
+            else:
+                self.rb_rig2.setChecked(True)
+            # update ready label
+            self._update_ready_rig_label()
+        except Exception:
+            pass
+
+    def _write_config(self) -> None:
+        """Write current SIGNAL and RIG selection to config path if known."""
+        try:
+            if not self._config_path:
+                return
+            p = Path(self._config_path)
+            sig = 'Signal' if self.rb_signal.isChecked() else ('Power' if self.rb_power.isChecked() else 'SWR')
+            rig = 'rig1' if self.rb_rig1.isChecked() else 'rig2'
+            p.write_text(f"SIGNAL={sig}\nRIG={rig}\n")
+        except Exception:
+            pass
+
     # Programmatic control methods
     def set_meter(self, value: int) -> None:
         """Set meter value in 0..255."""
@@ -483,6 +540,11 @@ class MainWindow(QMainWindow):
             print(f"Mode selected: {name}")
         except Exception:
             pass
+        # update config file
+        try:
+            self._write_config()
+        except Exception:
+            pass
 
     def _on_rig_changed(self, button) -> None:
         """Handler called when rig1/rig2 radio selection changes."""
@@ -494,6 +556,11 @@ class MainWindow(QMainWindow):
         # update ready-side label
         try:
             self._update_ready_rig_label()
+        except Exception:
+            pass
+        # update config file
+        try:
+            self._write_config()
         except Exception:
             pass
 
@@ -541,6 +608,25 @@ def main(argv: list[str] | None = None) -> int:
 
     # test mode: animate meter up/down if --test argument provided
     args = sys.argv[1:] if argv is None else (argv[1:] if len(argv) > 1 else [])
+    # handle --config argument and --test
+    args = sys.argv[1:] if argv is None else (argv[1:] if len(argv) > 1 else [])
+    config_path = None
+    for i, a in enumerate(args):
+        if a.startswith("--config="):
+            config_path = a.split("=", 1)[1]
+        elif a == "--config" and i + 1 < len(args):
+            config_path = args[i + 1]
+
+    # set default config path if not provided
+    if not config_path:
+        config_path = "PyMeter.ini"
+
+    # load/create config
+    try:
+        win.load_config(config_path)
+    except Exception:
+        pass
+
     if "--test" in args:
         step = 3
         val = 0
