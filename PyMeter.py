@@ -788,6 +788,11 @@ def main(argv: list[str] | None = None) -> int:
         win.load_config(config_path)
     except Exception:
         pass
+    # reapply ready state so controls (VFO/SWAP) reflect Online/Offline after config load
+    try:
+        win.set_ready(getattr(win, '_online', False))
+    except Exception:
+        pass
 
     if "--test" in args:
         step = 3
