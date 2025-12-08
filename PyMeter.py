@@ -393,7 +393,7 @@ class MainWindow(QMainWindow):
         grid.addWidget(self.swap, 2, 1, Qt.AlignRight | Qt.AlignVCenter)
         # place VFO button under Swap
         grid.addWidget(self.vfo, 3, 1, Qt.AlignRight | Qt.AlignVCenter)
-        # row 2: radio buttons under meter, stacked vertically on left
+        # Signal/Power/SWR radio buttons immediately below the VUMeter (left column)
         radio_layout = QVBoxLayout()
         radio_layout.setContentsMargins(0, 0, 0, 0)
         radio_layout.setSpacing(2)
@@ -410,9 +410,9 @@ class MainWindow(QMainWindow):
         radio_layout.addWidget(self.rb_swr)
         # connect handler to selection changes
         self.mode_group.buttonClicked.connect(self._on_mode_changed)
-        grid.addLayout(radio_layout, 4, 0, Qt.AlignLeft)
+        grid.addLayout(radio_layout, 2, 0, Qt.AlignLeft)
 
-        # Antenna selection below the mode radios (Ant 1 / Ant 2)
+        # Antenna selection immediately below Signal/Power/SWR
         ant_layout = QVBoxLayout()
         ant_layout.setContentsMargins(0, 6, 0, 0)
         ant_layout.setSpacing(2)
@@ -426,9 +426,9 @@ class MainWindow(QMainWindow):
         ant_layout.addWidget(self.rb_ant2)
         # connect antenna handler
         self.ant_group.buttonClicked.connect(self._on_ant_changed)
-        grid.addLayout(ant_layout, 5, 0, Qt.AlignLeft)
+        grid.addLayout(ant_layout, 3, 0, Qt.AlignLeft)
 
-        # rig selection controls stacked under Tune on right column
+        # rig selection controls stacked to the right aligned with Signal/Power/SWR
         rig_vlayout = QVBoxLayout()
         rig_vlayout.setContentsMargins(0, 0, 0, 0)
         rig_vlayout.setSpacing(2)
@@ -498,7 +498,7 @@ class MainWindow(QMainWindow):
 
         # connect handler
         self.rig_group.buttonClicked.connect(self._on_rig_changed)
-        grid.addLayout(rig_vlayout, 4, 1, Qt.AlignLeft)
+        grid.addLayout(rig_vlayout, 2, 1, Qt.AlignLeft)
 
         # ensure meter row expands
         grid.setRowStretch(1, 1)
