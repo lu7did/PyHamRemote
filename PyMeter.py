@@ -276,8 +276,17 @@ class MainWindow(QMainWindow):
         self.meter = VUMeter(segments=10)
         # single toggle button starting in RX state (0)
         self.tr = LedButton("RX")
+        # make TR button slightly narrower (closer to right edge)
+        try:
+            self.tr._button.setMinimumWidth(70)
+        except Exception:
+            pass
         # TUNE button below it
         self.tune = TuneButton("TUNE")
+        try:
+            self.tune._button.setMinimumWidth(70)
+        except Exception:
+            pass
 
         # Ready label + LED placed above the meter
         ready_row = QHBoxLayout()
@@ -308,10 +317,10 @@ class MainWindow(QMainWindow):
         grid.setColumnStretch(1, 0)
         # row 0: ready label+led (left) and TR button (right)
         grid.addLayout(ready_row, 0, 0)
-        grid.addWidget(self.tr, 0, 1, Qt.AlignVCenter)
+        grid.addWidget(self.tr, 0, 1, Qt.AlignRight | Qt.AlignVCenter)
         # row 1: meter (left) and tune button (right)
         grid.addWidget(self.meter, 1, 0)
-        grid.addWidget(self.tune, 1, 1, Qt.AlignVCenter)
+        grid.addWidget(self.tune, 1, 1, Qt.AlignRight | Qt.AlignVCenter)
         # row 2: radio buttons under meter, stacked vertically on left
         radio_layout = QVBoxLayout()
         radio_layout.setContentsMargins(0, 0, 0, 0)
