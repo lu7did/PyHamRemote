@@ -330,6 +330,39 @@ class MainWindow(QMainWindow):
         # connect handler to selection changes
         self.mode_group.buttonClicked.connect(self._on_mode_changed)
         grid.addLayout(radio_layout, 2, 0, Qt.AlignLeft)
+
+        # rig selection controls stacked under Tune on right column
+        rig_vlayout = QVBoxLayout()
+        rig_vlayout.setContentsMargins(0, 0, 0, 0)
+        rig_vlayout.setSpacing(2)
+        # radio buttons should be labeled "rig1" and "rig2"
+        self.rb_rig1 = QRadioButton("rig1")
+        self.rb_rig2 = QRadioButton("rig2")
+        self.rig_group = QButtonGroup(self)
+        self.rig_group.addButton(self.rb_rig1)
+        self.rig_group.addButton(self.rb_rig2)
+        self.rb_rig1.setChecked(True)
+        # labels showing the RigName next to each radio button (modifiable attribute)
+        self.rig1_name = "Rig 1"
+        self.rig2_name = "Rig 2"
+        rig1_row = QHBoxLayout()
+        rig1_row.setContentsMargins(0, 0, 0, 0)
+        rig1_row.setSpacing(4)
+        self.rig1_label = QLabel(self.rig1_name)
+        rig1_row.addWidget(self.rb_rig1)
+        rig1_row.addWidget(self.rig1_label)
+        rig_vlayout.addLayout(rig1_row)
+        rig2_row = QHBoxLayout()
+        rig2_row.setContentsMargins(0, 0, 0, 0)
+        rig2_row.setSpacing(4)
+        self.rig2_label = QLabel(self.rig2_name)
+        rig2_row.addWidget(self.rb_rig2)
+        rig2_row.addWidget(self.rig2_label)
+        rig_vlayout.addLayout(rig2_row)
+        # connect handler
+        self.rig_group.buttonClicked.connect(self._on_rig_changed)
+        grid.addLayout(rig_vlayout, 2, 1, Qt.AlignLeft)
+
         # ensure meter row expands
         grid.setRowStretch(1, 1)
 
@@ -428,6 +461,23 @@ class MainWindow(QMainWindow):
             print(f"Mode selected: {name}")
         except Exception:
             pass
+
+    def _on_rig_changed(self, button) -> None:
+        """Handler called when rig1/rig2 radio selection changes."""
+        try:
+            name = button.text() if hasattr(button, "text") else str(button)
+            print(f"Rig selected: {name}")
+        except Exception:
+            pass
+
+    def set_rig_name(self, index: int, name: str) -> None:
+        """Set the display name for a rig label (index 1 or 2)."""
+        if index == 1:
+            self.rig1_name = str(name)
+            self.rig1_label.setText(self.rig1_name)
+        elif index == 2:
+            self.rig2_name = str(name)
+            self.rig2_label.setText(self.rig2_name)
 
 
 def main(argv: list[str] | None = None) -> int:
