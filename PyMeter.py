@@ -304,8 +304,13 @@ class MainWindow(QMainWindow):
         self.ready_led.set_on(False)
         ready_row.addWidget(self.ready_led)
         ready_row.addWidget(self.ready_label)
+        # rig name display to the right of Online/Offline in parentheses
+        self.ready_rig_label = QLabel("")
+        self.ready_rig_label.setStyleSheet("margin-left:4px; color: #333;")
+        ready_row.addWidget(self.ready_rig_label)
         ready_row.setAlignment(self.ready_led, Qt.AlignVCenter)
         ready_row.setAlignment(self.ready_label, Qt.AlignVCenter)
+        ready_row.setAlignment(self.ready_rig_label, Qt.AlignVCenter)
 
         # Layout
         # Create a grid so corresponding rows align vertically across columns
@@ -379,6 +384,9 @@ class MainWindow(QMainWindow):
 
         # ensure meter row expands
         grid.setRowStretch(1, 1)
+
+        # update ready rig label initially
+        self._update_ready_rig_label()
 
         main_layout = grid
         # Example: connect button click to print state
@@ -483,6 +491,11 @@ class MainWindow(QMainWindow):
             print(f"Rig selected: {name}")
         except Exception:
             pass
+        # update ready-side label
+        try:
+            self._update_ready_rig_label()
+        except Exception:
+            pass
 
     def set_rig_name(self, index: int, name: str) -> None:
         """Set the display name for a rig label (index 1 or 2)."""
@@ -492,6 +505,27 @@ class MainWindow(QMainWindow):
         elif index == 2:
             self.rig2_name = str(name)
             self.rig2_label.setText(self.rig2_name)
+        # refresh ready-side label
+        try:
+            self._update_ready_rig_label()
+        except Exception:
+            pass
+
+    def _update_ready_rig_label(self) -> None:
+        """Update the small label next to Online/Offline showing the selected rig name."""
+        try:
+            if getattr(self, 'rb_rig1', None) and self.rb_rig1.isChecked():
+                name = self.rig1_label.text() if hasattr(self, 'rig1_label') else self.rig1_name
+            elif getattr(self, 'rb_rig2', None) and self.rb_rig2.isChecked():
+                name = self.rig2_label.text() if hasattr(self, 'rig2_label') else self.rig2_name
+            else:
+                name = ''
+            if name:
+                self.ready_rig_label.setText(f"({name})")
+            else:
+                self.ready_rig_label.setText('')
+        except Exception:
+            pass
 
 
 def main(argv: list[str] | None = None) -> int:
