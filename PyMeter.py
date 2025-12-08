@@ -502,6 +502,7 @@ class MainWindow(QMainWindow):
             cfg['SIGNAL'] = 'Signal'
             cfg['RIG'] = 'rig1'
             cfg['ANT'] = 'Ant 1'
+            cfg['VFO'] = 'VFOA'
             try:
                 p.write_text('\n'.join(f"{k}={v}" for k, v in cfg.items()) + '\n')
             except Exception:
@@ -526,6 +527,12 @@ class MainWindow(QMainWindow):
                 self.rb_ant2.setChecked(True)
             else:
                 self.rb_ant1.setChecked(True)
+            # VFO
+            vfo = cfg.get('VFO', 'VFOA')
+            if vfo == 'VFOB':
+                self.vfo.set_state(1)
+            else:
+                self.vfo.set_state(0)
             # update ready label
             self._update_ready_rig_label()
         except Exception:
@@ -540,7 +547,8 @@ class MainWindow(QMainWindow):
             sig = 'Signal' if self.rb_signal.isChecked() else ('Power' if self.rb_power.isChecked() else 'SWR')
             rig = 'rig1' if self.rb_rig1.isChecked() else 'rig2'
             ant = 'Ant 1' if self.rb_ant1.isChecked() else 'Ant 2'
-            p.write_text(f"SIGNAL={sig}\nRIG={rig}\nANT={ant}\n")
+            vfo = 'VFOB' if self.vfo.get_state() else 'VFOA'
+            p.write_text(f"SIGNAL={sig}\nRIG={rig}\nANT={ant}\nVFO={vfo}\n")
         except Exception:
             pass
 
@@ -675,6 +683,11 @@ class MainWindow(QMainWindow):
         try:
             label = "VFOB" if int(state) else "VFOA"
             print(f"VFO changed: {label}")
+        except Exception:
+            pass
+        # persist VFO state
+        try:
+            self._write_config()
         except Exception:
             pass
 
