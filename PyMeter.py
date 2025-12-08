@@ -609,14 +609,42 @@ class MainWindow(QMainWindow):
             except Exception:
                 pass
 
-            # update TUNE visuals
+            # update TUNE visuals and VFO/SWAP buttons
             try:
                 if self._online:
+                    # TUNE
                     self.tune._led.set_color_on((0, 255, 0))
                     self.tune._led.set_on(True)
+                    # VFO
+                    if self.vfo.get_state():
+                        self.vfo._led.set_color_on((255, 0, 0))
+                    else:
+                        self.vfo._led.set_color_on((0, 255, 0))
+                    self.vfo._led.set_on(True)
+                    self.vfo._button.setEnabled(True)
+                    # SWAP
+                    self.swap._led.set_color_on((0, 255, 0))
+                    self.swap._led.set_on(True)
+                    self.swap._button.setEnabled(True)
                 else:
+                    # TUNE
                     self.tune._led.set_color_off((0, 100, 0))
                     self.tune._led.set_on(False)
+                    # VFO: show dim color based on logical state
+                    try:
+                        if self.vfo.get_state():
+                            self.vfo._led.set_color_off((120, 0, 0))
+                        else:
+                            self.vfo._led.set_color_off((0, 100, 0))
+                    except Exception:
+                        # if vfo not present, fall back to neutral
+                        self.vfo._led.set_color_off((80, 80, 80))
+                    self.vfo._led.set_on(False)
+                    self.vfo._button.setEnabled(False)
+                    # SWAP
+                    self.swap._led.set_color_off((0, 100, 0))
+                    self.swap._led.set_on(False)
+                    self.swap._button.setEnabled(False)
             except Exception:
                 pass
 
