@@ -448,7 +448,7 @@ def main(argv: list[str] | None = None) -> int:
 
         ready_timer = QTimer()
         ready_timer.timeout.connect(blink_ready)
-        ready_timer.start(2000)
+        ready_timer.start(5000)
         win._ready_timer = ready_timer
 
     return app.exec()
