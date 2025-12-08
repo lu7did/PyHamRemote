@@ -347,6 +347,22 @@ class MainWindow(QMainWindow):
         self.mode_group.buttonClicked.connect(self._on_mode_changed)
         grid.addLayout(radio_layout, 2, 0, Qt.AlignLeft)
 
+        # Antenna selection below the mode radios (Ant 1 / Ant 2)
+        ant_layout = QVBoxLayout()
+        ant_layout.setContentsMargins(0, 6, 0, 0)
+        ant_layout.setSpacing(2)
+        self.rb_ant1 = QRadioButton("Ant 1")
+        self.rb_ant2 = QRadioButton("Ant 2")
+        self.ant_group = QButtonGroup(self)
+        self.ant_group.addButton(self.rb_ant1)
+        self.ant_group.addButton(self.rb_ant2)
+        self.rb_ant1.setChecked(True)
+        ant_layout.addWidget(self.rb_ant1)
+        ant_layout.addWidget(self.rb_ant2)
+        # connect antenna handler
+        self.ant_group.buttonClicked.connect(self._on_ant_changed)
+        grid.addLayout(ant_layout, 3, 0, Qt.AlignLeft)
+
         # rig selection controls stacked under Tune on right column
         rig_vlayout = QVBoxLayout()
         rig_vlayout.setContentsMargins(0, 0, 0, 0)
@@ -416,6 +432,7 @@ class MainWindow(QMainWindow):
             # create default
             cfg['SIGNAL'] = 'Signal'
             cfg['RIG'] = 'rig1'
+            cfg['ANT'] = 'Ant 1'
             try:
                 p.write_text('\n'.join(f"{k}={v}" for k, v in cfg.items()) + '\n')
             except Exception:
@@ -434,6 +451,12 @@ class MainWindow(QMainWindow):
                 self.rb_rig1.setChecked(True)
             else:
                 self.rb_rig2.setChecked(True)
+            # antenna
+            ant = cfg.get('ANT', 'Ant 1')
+            if ant == 'Ant 2':
+                self.rb_ant2.setChecked(True)
+            else:
+                self.rb_ant1.setChecked(True)
             # update ready label
             self._update_ready_rig_label()
         except Exception:
@@ -447,7 +470,8 @@ class MainWindow(QMainWindow):
             p = Path(self._config_path)
             sig = 'Signal' if self.rb_signal.isChecked() else ('Power' if self.rb_power.isChecked() else 'SWR')
             rig = 'rig1' if self.rb_rig1.isChecked() else 'rig2'
-            p.write_text(f"SIGNAL={sig}\nRIG={rig}\n")
+            ant = 'Ant 1' if self.rb_ant1.isChecked() else 'Ant 2'
+            p.write_text(f"SIGNAL={sig}\nRIG={rig}\nANT={ant}\n")
         except Exception:
             pass
 
@@ -559,6 +583,19 @@ class MainWindow(QMainWindow):
         except Exception:
             pass
         # update config file
+        try:
+            self._write_config()
+        except Exception:
+            pass
+
+    def _on_ant_changed(self, button) -> None:
+        """Handler called when antenna selection changes."""
+        try:
+            name = button.text() if hasattr(button, "text") else str(button)
+            print(f"Antenna selected: {name}")
+        except Exception:
+            pass
+        # persist selection
         try:
             self._write_config()
         except Exception:
