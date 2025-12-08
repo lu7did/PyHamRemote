@@ -649,6 +649,14 @@ class MainWindow(QMainWindow):
             # enable/disable controls
             self.tr._button.setEnabled(self._online)
             self.tune._button.setEnabled(self._online)
+            # enable/disable sliders (Power and Volumen) when offline
+            try:
+                if getattr(self, 'slider_power', None) is not None:
+                    self.slider_power.setEnabled(self._online)
+                if getattr(self, 'slider_vol', None) is not None:
+                    self.slider_vol.setEnabled(self._online)
+            except Exception:
+                pass
 
             # update TR (RX/TX) LED visuals according to mode and online state
             try:
