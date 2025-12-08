@@ -349,6 +349,9 @@ class MainWindow(QMainWindow):
         rig1_row.setContentsMargins(0, 0, 0, 0)
         rig1_row.setSpacing(4)
         self.rig1_label = QLabel(self.rig1_name)
+        # allow room for up to ~15 chars
+        self.rig1_label.setMinimumWidth(150)
+        self.rig1_label.setAlignment(Qt.AlignLeft | Qt.AlignVCenter)
         rig1_row.addWidget(self.rb_rig1)
         rig1_row.addWidget(self.rig1_label)
         rig_vlayout.addLayout(rig1_row)
@@ -356,6 +359,8 @@ class MainWindow(QMainWindow):
         rig2_row.setContentsMargins(0, 0, 0, 0)
         rig2_row.setSpacing(4)
         self.rig2_label = QLabel(self.rig2_name)
+        self.rig2_label.setMinimumWidth(150)
+        self.rig2_label.setAlignment(Qt.AlignLeft | Qt.AlignVCenter)
         rig2_row.addWidget(self.rb_rig2)
         rig2_row.addWidget(self.rig2_label)
         rig_vlayout.addLayout(rig2_row)
