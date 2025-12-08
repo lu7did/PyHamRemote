@@ -378,21 +378,28 @@ class MainWindow(QMainWindow):
         grid.setContentsMargins(12, 4, 12, 4)
         grid.setColumnStretch(0, 1)
         grid.setColumnStretch(1, 0)
-        # row 0: ready label+led (left) and TR button (right)
+        # row 0: ready label+led (left) and TR area (right)
         grid.addLayout(ready_row, 0, 0)
-        grid.addWidget(self.tr, 0, 1, Qt.AlignRight | Qt.AlignVCenter)
-        # row 1: meter (left) and tune button (right)
-        grid.addWidget(self.meter, 1, 0)
-        grid.addWidget(self.tune, 1, 1, Qt.AlignRight | Qt.AlignVCenter)
-        # place Swap button under Tune (above VFO) to space uniformly between TR/TUNE
+        # create Swap button instance for right column
         self.swap = SwapButton("A<>B")
         try:
             self.swap._button.setMinimumWidth(70)
         except Exception:
             pass
-        grid.addWidget(self.swap, 2, 1, Qt.AlignRight | Qt.AlignVCenter)
-        # place VFO button under Swap
-        grid.addWidget(self.vfo, 3, 1, Qt.AlignRight | Qt.AlignVCenter)
+        # right column: vertical stack with TR at top and TUNE at bottom, swap and vfo evenly spaced between
+        right_col = QVBoxLayout()
+        right_col.setContentsMargins(0, 0, 0, 0)
+        right_col.addWidget(self.tr, alignment=Qt.AlignRight)
+        right_col.addStretch()
+        # ensure swap is above VFO
+        right_col.addWidget(self.swap, alignment=Qt.AlignRight)
+        right_col.addWidget(self.vfo, alignment=Qt.AlignRight)
+        right_col.addStretch()
+        right_col.addWidget(self.tune, alignment=Qt.AlignRight)
+        # place meter at row 1 left
+        grid.addWidget(self.meter, 1, 0)
+        # place right_col spanning rows 0..1 so the group sits between top and meter area
+        grid.addLayout(right_col, 0, 1, 2, 1)
         # Signal/Power/SWR radio buttons immediately below the VUMeter (left column)
         radio_layout = QVBoxLayout()
         radio_layout.setContentsMargins(0, 0, 0, 0)
