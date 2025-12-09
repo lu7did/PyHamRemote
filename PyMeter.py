@@ -22,6 +22,8 @@ from typing import Tuple
 import sys
 from pathlib import Path
 
+
+
 from PyQt5.QtCore import Qt, QSize, QTimer, QEvent
 from PyQt5.QtGui import QPainter, QColor, QPen
 from PyQt5.QtWidgets import (
@@ -37,7 +39,78 @@ from PyQt5.QtWidgets import (
     QSizePolicy,
 )
 
+import time
+import pythoncom
+import win32com.client
+import argparse
+import sys
 
+defaultNamedNotOptArg = pythoncom.Empty
+flagEnd = False
+
+#*--------------------------------------------------------------------------------------
+#* OmniRig handler classes
+#*--------------------------------------------------------------------------------------
+class OmniRigEvents:
+    """Manejador de eventos para OmniRig (COM)."""
+
+    def OnCustomReply(self,
+                      RigNumber=defaultNamedNotOptArg,
+                      Command=defaultNamedNotOptArg,
+                      Reply=defaultNamedNotOptArg):
+        """Evento disparado cuando llega una respuesta al comando personalizado."""
+        try:
+            reply_bytes = bytes(Reply)
+        except TypeError:
+            reply_bytes = Reply
+        print(f"[CustomReply] Rig={RigNumber} Cmd={Command!r} Reply={reply_bytes!r}")
+        flagEnd = True
+
+def get_attribute(rig):
+    """
+    Intenta llamar a la interfaz de dispatch Get_StatusStr del rig.
+    Si no existe como método, prueba la propiedad StatusStr.
+    """
+    status_str = "<desconocido>"
+
+    # Algunos wrappers exponen directamente Get_StatusStr()
+    if hasattr(rig, "Get_StatusStr"):
+        try:
+            status_str = rig.Get_StatusStr()
+        except Exception as e:
+            status_str = f"<error llamando Get_StatusStr: {e}>"
+    # Otros exponen la propiedad StatusStr
+    elif hasattr(rig, "StatusStr"):
+        try:
+            status_str = rig.StatusStr
+        except Exception as e:
+            status_str = f"<error leyendo StatusStr: {e}>"
+
+    return status_str
+
+def getMode(mode):
+
+  if mode == 0x00800000:
+     return "CW-U"
+  if mode == 0x01000000:
+     return "CW-L"
+  if mode == 0x02000000:
+     return "USB"
+  if mode == 0x04000000:
+     return "LSB"
+  if mode == 0x08000000:
+     return "DIG-U"
+  if mode == 0x10000000:
+     return "DIG-L"
+  if mode == 0x20000000:
+     return "AM"
+  if mode == 0x20000000:
+     return "FM"
+  return "???"
+
+#*--------------------------------------------------------------------------------------
+#* GUI Handler classes
+#*--------------------------------------------------------------------------------------
 class VUMeter(QWidget):
     """Widget that displays a VU meter using a row of LED-like segments.
 
@@ -331,7 +404,7 @@ class MainWindow(QMainWindow):
     def __init__(self) -> None:
         super().__init__()
         self._config_path: Path | None = None
-        self.setWindowTitle("PyMeter - VU Meter with TX/RX LEDs")
+        self.setWindowTitle("Remote rig control console")
         central = QWidget()
         self.setCentralWidget(central)
 
@@ -790,6 +863,7 @@ class MainWindow(QMainWindow):
         try:
             name = button.text() if hasattr(button, "text") else str(button)
             print(f"Rig selected: {name}")
+            print("Paso por on_rig_changed")
         except Exception:
             pass
         # update ready-side label
@@ -802,6 +876,12 @@ class MainWindow(QMainWindow):
             self._write_config()
         except Exception:
             pass
+        try:
+            print("va a updateRigStatus")
+            updateRigStatus(omni,win)
+        except Exception:
+            pass
+    
 
     def _on_ant_changed(self, button) -> None:
         """Handler called when antenna selection changes."""
@@ -952,6 +1032,59 @@ class MainWindow(QMainWindow):
         except Exception:
             pass
 
+    def SendCAT(rig, command_str,reply_length,reply_end):
+       command_bytes = command_str.encode("ascii")
+       try:
+           while True:
+               pythoncom.PumpWaitingMessages()
+               if reply_length == 0:
+                  print(f"CMD[{cmd_sent}] --> ANSWER[{command_bytes}]")
+                  #time.sleep(1)
+                  return ""
+               print(f"{command_bytes}")
+               if cmd_sent != command_bytes:            
+                  print(f"CMD[{cmd_sent}] --> ANSWER[{command_bytes}]")
+                  return command_bytes
+       except Exception:
+           pass
+
+def updateRigStatus(omni,win):
+
+    print("entra en updateRigStatus")
+    rig1=omni.Rig1
+    rig2=omni.Rig2
+
+    rig1name=rig1.RigType
+    rig2name=rig2.RigType
+
+    print(f"Type ({rig1.RigType}) VFO A/B({rig1.Vfo}) main({rig1.Freq}) A({rig1.FreqA}) B({rig1.FreqB}) Mode({getMode(rig1.Mode)}) Split({rig1.Split and 0x8000})")
+    print(f"Type ({rig1.RigType}) Status({rig1.Status}) RIT({rig1.Rit}) XIT({rig1.Xit}) Status({rig1.StatusStr})")
+
+    print(f"Type ({rig2.RigType}) VFO A/B({rig2.Vfo}) main({rig2.Freq}) A({rig2.FreqA}) B({rig2.FreqB}) Mode({getMode(rig2.Mode)}) Split({rig2.Split and 0x8000})")
+    print(f"Type ({rig2.RigType}) Status({rig2.Status}) RIT({rig2.Rit}) XIT({rig2.Xit}) Status({rig2.StatusStr})")
+
+    win.rig1_label.setText(rig1name)
+    win.rig2_label.setText(rig2name)
+
+    if win.rb_rig1.isChecked():
+       print("Rig1 is checked")
+       if rig1.StatusStr == "On-line":
+          win.set_ready(True)
+          win.ready_rig_label.setText(f"({rig1.RigType})")
+       else:
+          win.set_ready(False)
+          win.ready_rig_label.setText("")
+    print("Termino de verificar rig1")
+    if win.rb_rig2.isChecked():
+       print("Rig2 is checked")
+       if rig2.StatusStr == "On-line":
+          win.set_ready(True)
+          win.ready_rig_label.setText(f"({rig2.RigType})")
+       else:
+          win.set_ready(False)
+          win.ready_rig_label.setText("")
+    print("Termino de verificar rig2")
+     
 
 def main(argv: list[str] | None = None) -> int:
     """Entry point for the GUI application."""
@@ -964,21 +1097,106 @@ def main(argv: list[str] | None = None) -> int:
     win.set_tr(0)
     win.set_ready(False)
 
-    # test mode: animate meter up/down if --test argument provided
-    args = sys.argv[1:] if argv is None else (argv[1:] if len(argv) > 1 else [])
-    # handle --config argument and --test
-    args = sys.argv[1:] if argv is None else (argv[1:] if len(argv) > 1 else [])
-    config_path = None
-    for i, a in enumerate(args):
-        if a.startswith("--config="):
-            config_path = a.split("=", 1)[1]
-        elif a == "--config" and i + 1 < len(args):
-            config_path = args[i + 1]
+   # ----------------------------------------------------------------------
+    # ARGUMENTOS
+    # ----------------------------------------------------------------------
+    parser = argparse.ArgumentParser(
+        description="Enviar un comando CAT a OmniRig usando pywin32."
+    )
 
-    # set default config path if not provided
-    if not config_path:
-        config_path = "PyMeter.ini"
+    parser.add_argument(
+        "-c", "--command",
+        required=True,
+        help="Comando CAT a enviar (string literal, ej.: 'FA;' o 'MG;')."
+    )
 
+    parser.add_argument(
+        "-l", "--length",
+        type=int,
+        default=0,
+        help="Longitud esperada de la respuesta. Default: 0"
+    )
+
+    parser.add_argument(
+        "-v", "--verbose",
+        default=False,
+        help="Carácter que indica fin de respuesta (default ';')."
+    )
+    parser.add_argument(
+        "-d", "--debug",
+        default=False,
+        help="Emite mensajes para hacer debug"
+    )
+
+    parser.add_argument(
+        "-e", "--end",
+        default=";",
+        help="Muestra estado del equipo controlado"
+    )
+
+    parser.add_argument(
+        "-r", "--rig",
+        default="rig1",
+        help="Define cual es el rig a controlar"
+    )
+
+   # ----------------------------------------------------------------------
+    # ARGUMENTOS
+    # ----------------------------------------------------------------------
+    parser = argparse.ArgumentParser(
+        description="Enviar un comando CAT a OmniRig usando pywin32."
+    )
+
+    parser.add_argument(
+        "-c", "--command",
+        required=True,
+        help="Comando CAT a enviar (string literal, ej.: 'FA;' o 'MG;')."
+    )
+
+    parser.add_argument(
+        "-l", "--length",
+        type=int,
+        default=0,
+        help="Longitud esperada de la respuesta. Default: 0"
+    )
+
+    parser.add_argument(
+        "-v", "--verbose",
+        default=False,
+        help="Carácter que indica fin de respuesta (default ';')."
+    )
+    parser.add_argument(
+        "-d", "--debug",
+        default=False,
+        help="Emite mensajes para hacer debug"
+    )
+
+    parser.add_argument(
+        "-e", "--end",
+        default=";",
+        help="Muestra estado del equipo controlado"
+    )
+
+    parser.add_argument(
+        "-r", "--rig",
+        default="rig1",
+        help="Define cual es el rig a controlar"
+    )
+
+    parser.add_argument(
+        "-i", "--config",
+        default="PyMeter.ini",
+        help="Configuration file"
+    )
+    parser.add_argument(
+        "-t", "--test",
+        default=False,
+        help="GUI animation"
+    )
+
+    args = parser.parse_args()
+
+    config_path=args.config
     # load/create config
     try:
         win.load_config(config_path)
@@ -990,7 +1208,47 @@ def main(argv: list[str] | None = None) -> int:
     except Exception:
         pass
 
-    if "--test" in args:
+
+
+    # test mode: animate meter up/down if --test argument provided
+    #args = sys.argv[1:] if argv is None else (argv[1:] if len(argv) > 1 else [])
+    # handle --config argument and --test
+    #args = sys.argv[1:] if argv is None else (argv[1:] if len(argv) > 1 else [])
+    #config_path = None
+    #for i, a in enumerate(args):
+    #    if a.startswith("--config="):
+    #        config_path = a.split("=", 1)[1]
+    #    elif a == "--config" and i + 1 < len(args):
+    #        config_path = args[i + 1]
+
+    # set default config path if not provided
+    #if not config_path:
+    #    config_path = "PyMeter.ini"
+
+    # ----------------------------------------------------------------------
+    # CREAR OBJETO COM
+    # ----------------------------------------------------------------------
+    omni = win32com.client.gencache.EnsureDispatch("OmniRig.OmniRigX")
+    omni_events = win32com.client.WithEvents(omni, OmniRigEvents)
+
+    if args.rig.upper() == "RIG2":
+       rig=omni.Rig2
+    else:
+       rig=omni.Rig1    
+
+    #rig1 = omni.Rig1
+
+
+#*----------------------------------------------------------------------------------------------------------------------
+#* Setup initial conditions of the rig
+#*----------------------------------------------------------------------------------------------------------------------
+    updateRigStatus(omni,win)
+
+#*----------------------------------------------------------------------------------------------------------------------
+#* Parse test arguments
+#*----------------------------------------------------------------------------------------------------------------------
+
+    if args.test:
         step = 3
         val = 0
         direction = 1
