@@ -1,8 +1,18 @@
-"""
-Simple Qt5 application providing a LED VU-meter (0..255) and two buttons
-with LED indicators named TX and RX. Buttons accept programmatic 0/1 values
-and toggle their state when clicked.
+#*---------------------------------------------------------------------------------------------------------
+#* PyMeter
+#* Simple Qt5 application providing a LED VU-meter (0..255) and two buttons
+#* with LED indicators named TX and RX. Buttons accept programmatic 0/1 values
+#* and toggle their state when clicked.
+#* Integrates with the OmniRig engine 
+#*
+#* LU7DZ Digital Remote Station -- Southern Croix Cluster
+#*
+#* (c) Dr Pedro E. Colla 2025
+#*
+#* License MIT -- Free for radioamateur uses
+#*-----------------------------------------------------------------------------------------------------------
 
+"""
 Designed following the style rules in CONTEXT.md: Python 3.12, OOP,
 separation of presentation and logic, basic error handling and type hints.
 """
