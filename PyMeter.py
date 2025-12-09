@@ -592,11 +592,27 @@ class MainWindow(QMainWindow):
                 self.vfo.set_state(0)
             # Power / Volume
             try:
-                self.slider_power.setValue(int(cfg.get('POWER', '0')))
+                if getattr(self, 'slider_power', None) is not None:
+                    # set programmatically without triggering handlers
+                    self.slider_power.blockSignals(True)
+                    self.slider_power.setValue(int(cfg.get('POWER', '0')))
+                    self.slider_power.blockSignals(False)
+                    # update displayed numeric label
+                    try:
+                        self.slider_power_value.setText(str(int(self.slider_power.value())) )
+                    except Exception:
+                        pass
             except Exception:
                 pass
             try:
-                self.slider_vol.setValue(int(cfg.get('VOLUME', '0')))
+                if getattr(self, 'slider_vol', None) is not None:
+                    self.slider_vol.blockSignals(True)
+                    self.slider_vol.setValue(int(cfg.get('VOLUME', '0')))
+                    self.slider_vol.blockSignals(False)
+                    try:
+                        self.slider_vol_value.setText(str(int(self.slider_vol.value())) )
+                    except Exception:
+                        pass
             except Exception:
                 pass
             # update ready label
