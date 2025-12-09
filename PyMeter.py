@@ -490,7 +490,8 @@ class MainWindow(QMainWindow):
         self.slider_power = QSlider(Qt.Horizontal)
         self.slider_power.setRange(0, 255)
         self.slider_power.setValue(0)
-        self.slider_power.valueChanged.connect(self._on_power_changed)
+        # connect power slider to isolated handler
+        self.slider_power.valueChanged.connect(lambda v, s=self.slider_power: self._handle_slider_change('power', v, s))
         self.slider_power.setFixedWidth(slider_width)
         self.slider_power_value = QLabel("0")
         power_row = QHBoxLayout()
@@ -506,7 +507,8 @@ class MainWindow(QMainWindow):
         self.slider_vol = QSlider(Qt.Horizontal)
         self.slider_vol.setRange(0, 255)
         self.slider_vol.setValue(0)
-        self.slider_vol.valueChanged.connect(self._on_volume_changed)
+        # connect volume slider to isolated handler
+        self.slider_vol.valueChanged.connect(lambda v, s=self.slider_vol: self._handle_slider_change('volume', v, s))
         self.slider_vol.setFixedWidth(slider_width)
         self.slider_vol_value = QLabel("0")
         vol_row = QHBoxLayout()
@@ -812,30 +814,37 @@ class MainWindow(QMainWindow):
             pass
 
     def _on_power_changed(self, value: int) -> None:
-        """Handler when Power slider changes. Ignore if not sent from the power slider."""
+        """Legacy handler kept for compatibility. Use _handle_slider_change instead."""
         try:
-            sender = self.sender()
-            if sender is not self.slider_power:
-                return
-            self.slider_power_value.setText(str(int(value)))
-            print(f"Power level: {int(value)}")
-        except Exception:
-            pass
-        try:
-            self._write_config()
+            self._handle_slider_change('power', value, self.slider_power)
         except Exception:
             pass
 
     def _on_volume_changed(self, value: int) -> None:
-        """Handler when Volumen slider changes. Ignore if not sent from the volume slider."""
+        """Legacy handler kept for compatibility. Use _handle_slider_change instead."""
         try:
-            sender = self.sender()
-            if sender is not self.slider_vol:
-                return
-            self.slider_vol_value.setText(str(int(value)))
-            print(f"Volume level: {int(value)}")
+            self._handle_slider_change('volume', value, self.slider_vol)
         except Exception:
             pass
+
+    def _handle_slider_change(self, name: str, value: int, slider_obj) -> None:
+        """Unified handler for sliders that updates only the specified control.
+
+        name is 'power' or 'volume', value is new int, slider_obj is the QSlider that produced the event.
+        This method strictly updates only the named slider and persists the value.
+        """
+        try:
+            if name == 'power' and slider_obj is self.slider_power:
+                self.slider_power_value.setText(str(int(value)))
+                print(f"Power level: {int(value)}")
+            elif name == 'volume' and slider_obj is self.slider_vol:
+                self.slider_vol_value.setText(str(int(value)))
+                print(f"Volume level: {int(value)}")
+            else:
+                return
+        except Exception:
+            pass
+        # persist only this value (write whole config)
         try:
             self._write_config()
         except Exception:
