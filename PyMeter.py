@@ -812,8 +812,11 @@ class MainWindow(QMainWindow):
             pass
 
     def _on_power_changed(self, value: int) -> None:
-        """Handler when Power slider changes."""
+        """Handler when Power slider changes. Ignore if not sent from the power slider."""
         try:
+            sender = self.sender()
+            if sender is not self.slider_power:
+                return
             self.slider_power_value.setText(str(int(value)))
             print(f"Power level: {int(value)}")
         except Exception:
@@ -824,8 +827,11 @@ class MainWindow(QMainWindow):
             pass
 
     def _on_volume_changed(self, value: int) -> None:
-        """Handler when Volumen slider changes."""
+        """Handler when Volumen slider changes. Ignore if not sent from the volume slider."""
         try:
+            sender = self.sender()
+            if sender is not self.slider_vol:
+                return
             self.slider_vol_value.setText(str(int(value)))
             print(f"Volume level: {int(value)}")
         except Exception:
