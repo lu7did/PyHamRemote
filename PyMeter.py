@@ -603,7 +603,7 @@ class MainWindow(QMainWindow):
                     try:
                         valp = int(self.slider_power.value())
                         disp_p = self._power_display_from_slider(valp)
-                        self.slider_power_value.setText(str(disp_p))
+                        self.slider_power_value.setText(f"{disp_p}W")
                     except Exception:
                         pass
             except Exception:
@@ -617,7 +617,7 @@ class MainWindow(QMainWindow):
                     try:
                         valv = int(self.slider_vol.value())
                         disp_v = self._volume_display_from_slider(valv)
-                        self.slider_vol_value.setText(f"{disp_v:.1f}")
+                        self.slider_vol_value.setText(str(disp_v))
                     except Exception:
                         pass
             except Exception:
@@ -838,7 +838,7 @@ class MainWindow(QMainWindow):
         Returns integer rounded value."""
         try:
             val = (95.0 * float(s) / 255.0) + 5.0
-            return int(round(val))
+            return int(val)
         except Exception:
             return 0
 
@@ -847,7 +847,7 @@ class MainWindow(QMainWindow):
         Returns float rounded to one decimal."""
         try:
             val = 10.0 * float(s) / 255.0
-            return round(val, 1)
+            return int(val)
         except Exception:
             return 0.0
 
@@ -860,12 +860,12 @@ class MainWindow(QMainWindow):
         try:
             if name == 'power' and slider_obj is self.slider_power:
                 disp = self._power_display_from_slider(int(value))
-                self.slider_power_value.setText(str(disp))
+                self.slider_power_value.setText(f"{disp}W")
                 print(f"Power level (slider={int(value)}): {disp}")
             elif name == 'volume' and slider_obj is self.slider_vol:
                 disp = self._volume_display_from_slider(int(value))
-                self.slider_vol_value.setText(f"{disp:.1f}")
-                print(f"Volume level (slider={int(value)}): {disp:.1f}")
+                self.slider_vol_value.setText(str(disp))
+                print(f"Volume level (slider={int(value)}): {disp}")
             else:
                 return
         except Exception:
