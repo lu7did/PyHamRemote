@@ -46,4 +46,5 @@ Licencia
 
 Ver fichero LICENSE en la raíz del proyecto.
 
+
 Última actualización: 2025-12-10T18:14:42.327Z
