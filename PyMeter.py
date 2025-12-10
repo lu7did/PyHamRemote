@@ -44,12 +44,6 @@ from PyQt5.QtWidgets import (
     QSizePolicy,
 )
 
-import time
-import pythoncom
-import win32com.client
-import argparse
-import sys
-
 defaultNamedNotOptArg = pythoncom.Empty
 flagEnd = False
 
@@ -1101,49 +1095,6 @@ def main(argv: list[str] | None = None) -> int:
     win.set_meter(0)
     win.set_tr(0)
     win.set_ready(False)
-
-   # ----------------------------------------------------------------------
-    # ARGUMENTOS
-    # ----------------------------------------------------------------------
-    parser = argparse.ArgumentParser(
-        description="Enviar un comando CAT a OmniRig usando pywin32."
-    )
-
-    parser.add_argument(
-        "-c", "--command",
-        required=True,
-        help="Comando CAT a enviar (string literal, ej.: 'FA;' o 'MG;')."
-    )
-
-    parser.add_argument(
-        "-l", "--length",
-        type=int,
-        default=0,
-        help="Longitud esperada de la respuesta. Default: 0"
-    )
-
-    parser.add_argument(
-        "-v", "--verbose",
-        default=False,
-        help="Carácter que indica fin de respuesta (default ';')."
-    )
-    parser.add_argument(
-        "-d", "--debug",
-        default=False,
-        help="Emite mensajes para hacer debug"
-    )
-
-    parser.add_argument(
-        "-e", "--end",
-        default=";",
-        help="Muestra estado del equipo controlado"
-    )
-
-    parser.add_argument(
-        "-r", "--rig",
-        default="rig1",
-        help="Define cual es el rig a controlar"
-    )
 
    # ----------------------------------------------------------------------
     # ARGUMENTOS
