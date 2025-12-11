@@ -89,5 +89,9 @@ Controles añadidos recientemente
 Funciones a nivel de módulo
 - updateRigStatus(omni, win): función pública que consulta el estado de OmniRig y actualiza etiquetas de rigs y estado Online/Offline llamando a win.set_ready(...).
 
-Última actualización: 2025-12-11T13:51:46.776Z
+Controles añadidos: Etiquetas de Frecuencia y VFO
+
+- Se añadieron etiquetas a la derecha de cada rig label para mostrar la frecuencia actual y el VFO activo: MainWindow.rig1_freq_label, MainWindow.rig1_vfo_label, MainWindow.rig2_freq_label, MainWindow.rig2_vfo_label. Estas se actualizan en updateRigStatus() y quedan alineadas verticalmente con las etiquetas de rig en la misma línea horizontal.
+
+Última actualización: 2025-12-11T19:20:00.074Z
 
