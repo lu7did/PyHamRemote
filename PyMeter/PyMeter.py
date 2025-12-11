@@ -3,7 +3,7 @@
 #* Simple Qt5 application providing a LED VU-meter (0..255) and two buttons
 #* with LED indicators named TX and RX. Buttons accept programmatic 0/1 values
 #* and toggle their state when clicked.
-#* Integrates with the OmniRig engine 
+#* Integrates with the OmniRig engine by Alex VE3NEA
 #*
 #* LU7DZ Digital Remote Station -- Southern Croix Cluster
 #*
@@ -45,7 +45,7 @@ from PyQt5.QtWidgets import (
 )
 
 flagEnd = False
-
+mutex=False
 
 def get_attribute(rig):
     """
@@ -310,24 +310,6 @@ class LedButton(QWidget):
             pass
 
 
-class TuneButton(LedButton):
-    """Momentary button: turns LED vivid red for 2s on click then returns to green."""
-
-    def __init__(self, label: str = "TUNE", parent: QWidget | None = None) -> None:
-        super().__init__(label, parent=parent)
-
-    def _on_clicked(self) -> None:
-        # set vivid red and schedule restore
-        self._led.set_color_on((255, 0, 0))
-        self._led.set_on(True)
-        self._button.setEnabled(False)
-        QTimer.singleShot(2000, self._restore)
-
-    def _restore(self) -> None:
-        # return to green lime
-        self._led.set_color_on((0, 255, 0))
-        self._led.set_on(True)
-        self._button.setEnabled(True)
 
 
 class VFOButton(LedButton):
@@ -378,24 +360,94 @@ class SwapButton(LedButton):
             self._button.setEnabled(True)
         except Exception:
             pass
+class TuneButton(LedButton):
+    """Momentary button: turns LED vivid red for 2s on click then returns to green."""
+
+    def __init__(self, label: str = "TUNE", parent: QWidget | None = None) -> None:
+        super().__init__(label, parent=parent)
+
+    def _setMainWindow(self,MainWindow):
+        self.win=MainWindow
+
+    def _on_clicked(self) -> None:
+        # set vivid red and schedule restore
+        self._led.set_color_on((255, 0, 0))
+        self._led.set_on(True)
+        self._button.setEnabled(False)
+        print("Tune button clicked")
+
+#*--- TUNE CAT command
+
+        print(f"Tunning {self.win.omni.Rig1.RigType}")
+        resp=self.win.SendCAT(self.win.omni.Rig1,"AC002;",0,";")
+        print(f"tune.onclick(): CAT ended response {resp}")
+        #QTimer.singleShot(2000, self._restore)
+        self._restore()
+
+
+    def _restore(self) -> None:
+        # return to green lime
+        self._led.set_color_on((0, 255, 0))
+        self._led.set_on(True)
+        self._button.setEnabled(True)
+
 
 class OmniRigEvents:
 
    defaultNamedNotOptArg = pythoncom.Empty
+   win=None
+
+   def __init__(self) -> None:
+       print("Omnirig event initialized")
 
    def OnCustomReply(self,RigNumber=defaultNamedNotOptArg,Command=defaultNamedNotOptArg,Reply=defaultNamedNotOptArg):
+       global mutex
        try:
           reply_bytes = bytes(Reply)
        except TypeError:
           reply_bytes = Reply
-       print(f"[CustomReply] Rig={RigNumber} Cmd={Command!r} Reply={reply_bytes!r}")
+       mutex=False
+       print(f"Procesó [CustomReply] Rig={RigNumber} Cmd={Command!r} Reply={reply_bytes!r} MUTEX({mutex})")
+
+    # Se llamará cuando cambie la visibilidad de la ventana de OmniRig
+   def OnVisibleChange(self, RigNumber):
+        print(f"[EVENT] VisibleChangeEvent: rig={RigNumber}", flush=True)
+
+    # Se llamará cuando cambie el tipo de rig
+   def OnRigTypeChange(self, RigNumber):
+        print(f"[EVENT] RigTypeChangeEvent: rig={RigNumber}", flush=True)
+
+    # Se llamará cuando cambie el estado del rig (online, offline, error, etc.)
+   def OnStatusChange(self, RigNumber):
+        global mutex
+        try:
+            rig = self.win.omni.Rig1 if RigNumber == 1 else self.win.omni.Rig2
+            # Get_StatusStr es una propiedad del RigX
+            status = rig.StatusStr
+            print(f"[EVENT] StatusChangeEvent: rig={RigNumber}, status='{status}'",flush=True)
+        except Exception as e:
+            print(f"[EVENT] StatusChangeEvent: rig={RigNumber}, error leyendo estado: {e}",flush=True)
+        if mutex==True:
+           mutex=False
+    # Se llamará cuando cambien parámetros (frecuencia, modo, etc.)
+   def OnParamsChange(self, RigNumber,e):
+        try:
+            rig = self.win.omni.Rig1 if RigNumber == 1 else self.win.omni.Rig2
+            freq = rig.Freq
+            mode = rig.Mode
+            #print(f"[EVENT] ParamsChangeEvent: rig={RigNumber}, freq={freq}, mode={mode}", flush=True)
+        except Exception as e:
+            print(f"[EVENT] ParamsChangeEvent: rig={RigNumber}, error leyendo params: {e}", flush=True)
+
+
+
 
 class MainWindow(QMainWindow):
     """Main application window composing the VU meter and TX/RX controls."""
 
     defaultNamedNotOptArg = pythoncom.Empty
 
-
+ 
     def __init__(self) -> None:
         super().__init__()
         self._config_path: Path | None = None
@@ -417,6 +469,7 @@ class MainWindow(QMainWindow):
             self.tune._button.setMinimumWidth(70)
         except Exception:
             pass
+
         # VFO toggle button under TUNE
         self.vfo = VFOButton("VFOA")
         try:
@@ -426,20 +479,25 @@ class MainWindow(QMainWindow):
 
         # Ready label + LED placed above the meter
         ready_row = QHBoxLayout()
+
         # make spacing minimal so the LED sits very close to the text
         ready_row.setSpacing(0)
         ready_row.setContentsMargins(0, 0, 0, 0)
         self.ready_label = QLabel("Offline")
+
         # remove extra label padding/margins so LED can sit next to the text
         self.ready_label.setStyleSheet("font-weight: bold; margin: 0px; padding-left: 2px;")
+
         # make ready LED slightly smaller to sit closer to the text
         self.ready_led = LedIndicator(diameter=6)
+
         # ready: on color lime, off color dark green, start off
         self.ready_led.set_color_on((0, 255, 0))
         self.ready_led.set_color_off((0, 100, 0))
         self.ready_led.set_on(False)
         ready_row.addWidget(self.ready_led)
         ready_row.addWidget(self.ready_label)
+
         # rig name display to the right of Online/Offline in parentheses
         self.ready_rig_label = QLabel("")
         self.ready_rig_label.setStyleSheet("margin-left:4px; color: #333;")
@@ -454,11 +512,13 @@ class MainWindow(QMainWindow):
 
         grid = QGridLayout(central)
         grid.setContentsMargins(12, 4, 12, 4)
+
         # reduce vertical spacing so radio group sits immediately under the meter
         grid.setVerticalSpacing(0)
         grid.setRowMinimumHeight(2, 0)
         grid.setColumnStretch(0, 1)
         grid.setColumnStretch(1, 0)
+
         # row 0: ready label+led (left) and TR area (right)
         grid.addLayout(ready_row, 0, 0)
         # create Swap button instance for right column
@@ -467,20 +527,25 @@ class MainWindow(QMainWindow):
             self.swap._button.setMinimumWidth(70)
         except Exception:
             pass
+
         # right column: vertical stack with TR at top and TUNE at bottom, swap and vfo evenly spaced between
         right_col = QVBoxLayout()
         right_col.setContentsMargins(0, 0, 0, 0)
         right_col.addWidget(self.tr, alignment=Qt.AlignRight)
         right_col.addStretch()
+
         # ensure swap is above VFO
         right_col.addWidget(self.swap, alignment=Qt.AlignRight)
         right_col.addWidget(self.vfo, alignment=Qt.AlignRight)
         right_col.addStretch()
         right_col.addWidget(self.tune, alignment=Qt.AlignRight)
+
         # place meter at row 1 left
         grid.addWidget(self.meter, 1, 0)
+
         # place right_col spanning rows 0..1 so the group sits between top and meter area
         grid.addLayout(right_col, 0, 1, 2, 1)
+
         # Signal/Power/SWR radio buttons immediately below the VUMeter (left column)
         radio_layout = QVBoxLayout()
         radio_layout.setContentsMargins(0, 0, 0, 0)
@@ -496,6 +561,7 @@ class MainWindow(QMainWindow):
         radio_layout.addWidget(self.rb_signal)
         radio_layout.addWidget(self.rb_power)
         radio_layout.addWidget(self.rb_swr)
+
         # connect handler to selection changes
         self.mode_group.buttonClicked.connect(self._on_mode_changed)
         grid.addLayout(radio_layout, 2, 0, Qt.AlignLeft)
@@ -512,8 +578,13 @@ class MainWindow(QMainWindow):
         self.rb_ant1.setChecked(True)
         ant_layout.addWidget(self.rb_ant1)
         ant_layout.addWidget(self.rb_ant2)
+
         # connect antenna handler
         self.ant_group.buttonClicked.connect(self._on_ant_changed)
+
+#*--- Tune CAT AC002;
+        self.tune._setMainWindow(self)
+
         grid.addLayout(ant_layout, 3, 0, Qt.AlignLeft)
 
         # rig selection controls stacked to the right aligned with Signal/Power/SWR
@@ -618,8 +689,14 @@ class MainWindow(QMainWindow):
     # ----------------------------------------------------------------------
     # CREAR OBJETO COM
     # ----------------------------------------------------------------------
-        self.omni = win32com.client.gencache.EnsureDispatch("OmniRig.OmniRigX")
-        self.omni_events = win32com.client.WithEvents(self.omni, OmniRigEvents)
+
+        pythoncom.CoInitialize()
+        self.omni = win32com.client.DispatchWithEvents("OmniRig.OmniRigX", OmniRigEvents)
+
+        #* DEBUG Make Settings window visible --- self.omni.DialogVisible=Tru
+        OmniRigEvents.win=self
+        OmniRigEvents.mutex=False
+
         self.rig1 = self.omni.Rig1
         self.rig2 = self.omni.Rig2
 
@@ -885,11 +962,19 @@ class MainWindow(QMainWindow):
         except Exception:
             pass
         try:
-            print("va a updateRigStatus")
             self.updateRigStatus()
         except Exception:
             pass
-    
+
+    def _on_tune_clicked(self, button) -> None:
+
+        try:
+            #self.tune._on_clicked(button)
+            print(f"Tune button clicked")
+
+        except Exception:
+            pass
+   
 
     def _on_ant_changed(self, button) -> None:
         """Handler called when antenna selection changes."""
@@ -964,7 +1049,11 @@ class MainWindow(QMainWindow):
             elif name == 'volume' and slider_obj is self.slider_vol:
                 disp = self._volume_display_from_slider(int(value))
                 self.slider_vol_value.setText(str(disp))
-                print(f"Volume level (slider={int(value)}): {disp}")
+                print(f"Volume level handled (slider={int(value)}): {disp}")
+                CATcmd=f"AG0{value:03d};"
+                resp=self.SendCAT(self.omni.Rig1,CATcmd,0,";")
+                print(f"handle_slider_change(): CAT {CATcmd} ended response {resp}")
+
             else:
                 return
         except Exception:
@@ -1042,13 +1131,11 @@ class MainWindow(QMainWindow):
 
     def updateRigStatus(self) -> None:
 
-       print("entra en updateRigStatus")
        r1=self.rig1
        r2=self.rig2
 
        rig1name=r1.RigType
        rig2name=r2.RigType
-
 
        print(f"Type ({r1.RigType}) VFO A/B({r1.Vfo}) main({r1.Freq}) A({r1.FreqA}) B({r1.FreqB}) Mode({getMode(r1.Mode)}) Split({r1.Split and 0x8000})")
        print(f"Type ({r1.RigType}) Status({r1.Status}) RIT({r1.Rit}) XIT({r1.Xit}) Status({r1.StatusStr})")
@@ -1060,38 +1147,39 @@ class MainWindow(QMainWindow):
        self.rig2_label.setText(rig2name)
 
        if self.rb_rig1.isChecked():
-          print("Rig1 is checked")
+          print("Checked rig1")
           if r1.StatusStr == "On-line":
              self.set_ready(True)
              self.ready_rig_label.setText(f"({r1.RigType})")
           else:
              self.set_ready(False)
              self.ready_rig_label.setText("")
-       print("Termino de verificar rig1")
+          return
        if self.rb_rig2.isChecked():
-          print("Rig2 is checked")
+          print("Checked rig2")
           if r2.StatusStr == "On-line":
              self.set_ready(True)
              self.ready_rig_label.setText(f"({r2.RigType})")
           else:
              self.set_ready(False)
              self.ready_rig_label.setText("")
-       print("Termino de verificar rig2")
+          return
+       print("No encontró un rig chequeado")
+  
 
+    def SendCAT(self,rig, command_str,reply_length,reply_end):
 
-
-    def SendCAT(rig, command_str,reply_length,reply_end):
+       global mutex
        command_bytes = command_str.encode("ascii")
+       print(f"Received CAT[{command_bytes}]")
+       mutex=True       
+       rig.SendCustomCommand(command_bytes,reply_length,reply_end)
+
        try:
            while True:
                pythoncom.PumpWaitingMessages()
-               if reply_length == 0:
-                  print(f"CMD[{cmd_sent}] --> ANSWER[{command_bytes}]")
-                  #time.sleep(1)
-                  return ""
-               print(f"{command_bytes}")
-               if cmd_sent != command_bytes:            
-                  print(f"CMD[{cmd_sent}] --> ANSWER[{command_bytes}]")
+               if mutex == False:
+                  print(f"Respuesta ({command_bytes})")
                   return command_bytes
        except Exception:
            pass
