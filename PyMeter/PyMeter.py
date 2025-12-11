@@ -683,20 +683,38 @@ class MainWindow(QMainWindow):
         rig1_row.setContentsMargins(0, 0, 0, 0)
         rig1_row.setSpacing(4)
         self.rig1_label = QLabel(self.rig1_name)
+         # additional labels: Frequency and VFO (aligned to the right of rig label)
+         self.rig1_freq_label = QLabel("")
+         self.rig1_freq_label.setMinimumWidth(100)
+         self.rig1_freq_label.setAlignment(Qt.AlignLeft | Qt.AlignVCenter)
+         self.rig1_vfo_label = QLabel("")
+         self.rig1_vfo_label.setMinimumWidth(50)
+         self.rig1_vfo_label.setAlignment(Qt.AlignLeft | Qt.AlignVCenter)
         # allow room for up to ~15 chars
         self.rig1_label.setMinimumWidth(150)
         self.rig1_label.setAlignment(Qt.AlignLeft | Qt.AlignVCenter)
         rig1_row.addWidget(self.rb_rig1)
         rig1_row.addWidget(self.rig1_label)
+         rig1_row.addWidget(self.rig1_freq_label)
+         rig1_row.addWidget(self.rig1_vfo_label)
         rig_vlayout.addLayout(rig1_row)
         rig2_row = QHBoxLayout()
         rig2_row.setContentsMargins(0, 0, 0, 0)
         rig2_row.setSpacing(4)
         self.rig2_label = QLabel(self.rig2_name)
+         # additional labels for rig2: Frequency and VFO
+         self.rig2_freq_label = QLabel("")
+         self.rig2_freq_label.setMinimumWidth(100)
+         self.rig2_freq_label.setAlignment(Qt.AlignLeft | Qt.AlignVCenter)
+         self.rig2_vfo_label = QLabel("")
+         self.rig2_vfo_label.setMinimumWidth(50)
+         self.rig2_vfo_label.setAlignment(Qt.AlignLeft | Qt.AlignVCenter)
         self.rig2_label.setMinimumWidth(150)
         self.rig2_label.setAlignment(Qt.AlignLeft | Qt.AlignVCenter)
         rig2_row.addWidget(self.rb_rig2)
         rig2_row.addWidget(self.rig2_label)
+         rig2_row.addWidget(self.rig2_freq_label)
+         rig2_row.addWidget(self.rig2_vfo_label)
         rig_vlayout.addLayout(rig2_row)
         # connect handler
         self.rig_group.buttonClicked.connect(self._on_rig_changed)
@@ -1318,7 +1336,23 @@ class MainWindow(QMainWindow):
        print(f"Type ({r2.RigType}) Status({r2.Status}) RIT({r2.Rit}) XIT({r2.Xit}) Status({r2.StatusStr})")
 
        self.rig1_label.setText(rig1name)
+       try:
+           self.rig1_freq_label.setText(str(getattr(r1, "Freq", "")))
+       except Exception:
+           pass
+       try:
+           self.rig1_vfo_label.setText("VFOB" if getattr(r1, "Vfo", 0) else "VFOA")
+       except Exception:
+           pass
        self.rig2_label.setText(rig2name)
+       try:
+           self.rig2_freq_label.setText(str(getattr(r2, "Freq", "")))
+       except Exception:
+           pass
+       try:
+           self.rig2_vfo_label.setText("VFOB" if getattr(r2, "Vfo", 0) else "VFOA")
+       except Exception:
+           pass
 
        if self.rb_rig1.isChecked():
           print("Checked rig1")
