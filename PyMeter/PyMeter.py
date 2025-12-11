@@ -549,6 +549,15 @@ class MainWindow(QMainWindow):
         right_col.addWidget(self.vfo, alignment=Qt.AlignRight)
         right_col.addStretch()
         right_col.addWidget(self.tune, alignment=Qt.AlignRight)
+        # add MUTE button below TUNE without altering other positions
+        self.mute = LedButton("MUTE", color_on=(255, 0, 0))
+        try:
+            self.mute._button.setMinimumWidth(70)
+        except Exception:
+            pass
+        right_col.addWidget(self.mute, alignment=Qt.AlignRight)
+        # emit event when mute toggled
+        self.mute._button.clicked.connect(lambda: self._on_mute(self.mute.get_state()))
 
         # place meter at row 1 left
         grid.addWidget(self.meter, 1, 0)
@@ -593,6 +602,26 @@ class MainWindow(QMainWindow):
         self.ant_group.buttonClicked.connect(self._on_ant_changed)
         self.tune._setMainWindow(self)
         grid.addLayout(ant_layout, 3, 0, Qt.AlignLeft)
+
+        # QRP mode radio buttons (QRP / MID / LP) placed below antenna selectors
+        qrp_layout = QHBoxLayout()
+        qrp_layout.setContentsMargins(0, 6, 0, 0)
+        qrp_layout.setSpacing(6)
+        self.rb_qrp = QRadioButton("QRP")
+        self.rb_mid = QRadioButton("MID")
+        self.rb_lp = QRadioButton("LP")
+        self.qrp_group = QButtonGroup(self)
+        self.qrp_group.addButton(self.rb_qrp)
+        self.qrp_group.addButton(self.rb_mid)
+        self.qrp_group.addButton(self.rb_lp)
+        # default selection
+        self.rb_mid.setChecked(True)
+        qrp_layout.addWidget(self.rb_qrp)
+        qrp_layout.addWidget(self.rb_mid)
+        qrp_layout.addWidget(self.rb_lp)
+        # connect handler to emit event on change
+        self.qrp_group.buttonClicked.connect(self._on_qrp_changed)
+        grid.addLayout(qrp_layout, 5, 0, Qt.AlignLeft)
 
         # rig selection controls stacked to the right aligned with Signal/Power/SWR
         rig_vlayout = QVBoxLayout()
@@ -1099,6 +1128,21 @@ class MainWindow(QMainWindow):
         """Handler for swap button press - perform swap action/event."""
         try:
             print("Swap event: exchange VFO A <-> B")
+        except Exception:
+            pass
+
+    def _on_mute(self, state: int) -> None:
+        """Handler called when MUTE button is toggled. State: 0=unmuted, 1=muted."""
+        try:
+            print(f"MUTE toggled: {int(state)}")
+        except Exception:
+            pass
+
+    def _on_qrp_changed(self, button) -> None:
+        """Handler called when QRP/MID/LP selection changes."""
+        try:
+            name = button.text() if hasattr(button, "text") else str(button)
+            print(f"QRP mode selected: {name}")
         except Exception:
             pass
 
