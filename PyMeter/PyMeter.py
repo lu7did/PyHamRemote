@@ -458,6 +458,15 @@ class OmniRigEvents:
             rig = self.win.omni.Rig1 if RigNumber == 1 else self.win.omni.Rig2
             freq = rig.Freq
             mode = rig.Mode
+            if RigNumber==1:
+               self.win.rig1_freq_label.setText(f"{freq/1e6:.3f} MHz")
+               self.win.rig1_vfo_label.setText(str(rig.Vfo))
+
+               #self.win.rig1_vfo_label.setText(f"{getMode(mode)}")
+            else:
+               self.win.rig2_freq_label.setText(f"{freq/1e6:.3f} MHz")
+               self.win.rig2_vfo_label.setText(str(rig.Vfo))
+
             #print(f"[EVENT] ParamsChangeEvent: rig={RigNumber}, freq={freq}, mode={mode}", flush=True)
         except Exception as e:
             print(f"[EVENT] ParamsChangeEvent: rig={RigNumber}, error leyendo params: {e}", flush=True)
@@ -684,37 +693,37 @@ class MainWindow(QMainWindow):
         rig1_row.setSpacing(4)
         self.rig1_label = QLabel(self.rig1_name)
          # additional labels: Frequency and VFO (aligned to the right of rig label)
-         self.rig1_freq_label = QLabel("")
-         self.rig1_freq_label.setMinimumWidth(100)
-         self.rig1_freq_label.setAlignment(Qt.AlignLeft | Qt.AlignVCenter)
-         self.rig1_vfo_label = QLabel("")
-         self.rig1_vfo_label.setMinimumWidth(50)
-         self.rig1_vfo_label.setAlignment(Qt.AlignLeft | Qt.AlignVCenter)
+        self.rig1_freq_label = QLabel("")
+        self.rig1_freq_label.setMinimumWidth(100)
+        self.rig1_freq_label.setAlignment(Qt.AlignLeft | Qt.AlignVCenter)
+        self.rig1_vfo_label = QLabel("")
+        self.rig1_vfo_label.setMinimumWidth(50)
+        self.rig1_vfo_label.setAlignment(Qt.AlignLeft | Qt.AlignVCenter)
         # allow room for up to ~15 chars
         self.rig1_label.setMinimumWidth(150)
         self.rig1_label.setAlignment(Qt.AlignLeft | Qt.AlignVCenter)
         rig1_row.addWidget(self.rb_rig1)
         rig1_row.addWidget(self.rig1_label)
-         rig1_row.addWidget(self.rig1_freq_label)
-         rig1_row.addWidget(self.rig1_vfo_label)
+        rig1_row.addWidget(self.rig1_freq_label)
+        rig1_row.addWidget(self.rig1_vfo_label)
         rig_vlayout.addLayout(rig1_row)
         rig2_row = QHBoxLayout()
         rig2_row.setContentsMargins(0, 0, 0, 0)
         rig2_row.setSpacing(4)
         self.rig2_label = QLabel(self.rig2_name)
          # additional labels for rig2: Frequency and VFO
-         self.rig2_freq_label = QLabel("")
-         self.rig2_freq_label.setMinimumWidth(100)
-         self.rig2_freq_label.setAlignment(Qt.AlignLeft | Qt.AlignVCenter)
-         self.rig2_vfo_label = QLabel("")
-         self.rig2_vfo_label.setMinimumWidth(50)
-         self.rig2_vfo_label.setAlignment(Qt.AlignLeft | Qt.AlignVCenter)
+        self.rig2_freq_label = QLabel("")
+        self.rig2_freq_label.setMinimumWidth(100)
+        self.rig2_freq_label.setAlignment(Qt.AlignLeft | Qt.AlignVCenter)
+        self.rig2_vfo_label = QLabel("")
+        self.rig2_vfo_label.setMinimumWidth(50)
+        self.rig2_vfo_label.setAlignment(Qt.AlignLeft | Qt.AlignVCenter)
         self.rig2_label.setMinimumWidth(150)
         self.rig2_label.setAlignment(Qt.AlignLeft | Qt.AlignVCenter)
         rig2_row.addWidget(self.rb_rig2)
         rig2_row.addWidget(self.rig2_label)
-         rig2_row.addWidget(self.rig2_freq_label)
-         rig2_row.addWidget(self.rig2_vfo_label)
+        rig2_row.addWidget(self.rig2_freq_label)
+        rig2_row.addWidget(self.rig2_vfo_label)
         rig_vlayout.addLayout(rig2_row)
         # connect handler
         self.rig_group.buttonClicked.connect(self._on_rig_changed)
@@ -841,7 +850,18 @@ class MainWindow(QMainWindow):
         resp=self.SendCAT(self.omni.Rig1,cmd,0,";")
         return
 
+    def setAnt(self, ant):
+        antN = ant.split(" ")
+        code = antN[-1]
+        cmd=f"AN0{code};"
+        resp=self.SendCAT(self.omni.Rig1,cmd,0,";")
+        return      
 
+    def getAnt(self):
+        cmd=f"AN0;"
+        resp=self.SendCAT(self.omni.Rig1,cmd,0,";")
+        print(f"Get Antena Response es {resp}")
+        return resp    
 #*--------------------------------------------------------------------------------------
 #* OmniRig handler classes
 #*--------------------------------------------------------------------------------------
@@ -1118,7 +1138,9 @@ class MainWindow(QMainWindow):
         """Handler called when antenna selection changes."""
         try:
             name = button.text() if hasattr(button, "text") else str(button)
-            print(f"Antenna selected: {name}")
+            self.setAnt(name)
+            print(f"Antenna selected: {name} currently set to {self.getAnt()}")
+
         except Exception:
             pass
         # persist selection
@@ -1266,7 +1288,7 @@ class MainWindow(QMainWindow):
              
         except Exception:
             pass
-
+   
     def setPower(self, power: int) -> None:
         resp=self.SendCAT(self.omni.Rig1,f"PC{power:0{3}d};",0,";")   
         print(f"Response to Power change; is {resp}")
@@ -1329,28 +1351,41 @@ class MainWindow(QMainWindow):
        rig1name=r1.RigType
        rig2name=r2.RigType
 
-       print(f"Type ({r1.RigType}) VFO A/B({r1.Vfo}) main({r1.Freq}) A({r1.FreqA}) B({r1.FreqB}) Mode({getMode(r1.Mode)}) Split({r1.Split and 0x8000})")
+       vfo1=r1.Vfo and 0x00000800
+
+       print(f"Type ({r1.RigType}) VFO A/B({vfo1}) main({r1.Freq}) A({r1.FreqA}) B({r1.FreqB}) Mode({getMode(r1.Mode)}) Split({r1.Split and 0x8000})")
        print(f"Type ({r1.RigType}) Status({r1.Status}) RIT({r1.Rit}) XIT({r1.Xit}) Status({r1.StatusStr})")
 
-       print(f"Type ({r2.RigType}) VFO A/B({r2.Vfo}) main({r2.Freq}) A({r2.FreqA}) B({r2.FreqB}) Mode({getMode(r2.Mode)}) Split({r2.Split and 0x8000})")
+       vfo2=r2.Vfo
+       print(f"Type ({r2.RigType}) VFO A/B({vfo2}) main({r2.Freq}) A({r2.FreqA}) B({r2.FreqB}) Mode({getMode(r2.Mode)}) Split({r2.Split and 0x8000})")
        print(f"Type ({r2.RigType}) Status({r2.Status}) RIT({r2.Rit}) XIT({r2.Xit}) Status({r2.StatusStr})")
 
        self.rig1_label.setText(rig1name)
        try:
-           self.rig1_freq_label.setText(str(getattr(r1, "Freq", "")))
+
+           freq=f"{r1.Freq/1e6:.3f} MHz" 
+           self.rig1_freq_label.setText(f"{freq}")
+
        except Exception:
            pass
        try:
-           self.rig1_vfo_label.setText("VFOB" if getattr(r1, "Vfo", 0) else "VFOA")
+           #self.rig1_vfo_label.setText("VFOB" if getattr(r1, "Vfo", 0) else "VFOA")
+           self.rig1_vfo_label.setText(str(r1.Vfo))
+
        except Exception:
            pass
        self.rig2_label.setText(rig2name)
        try:
-           self.rig2_freq_label.setText(str(getattr(r2, "Freq", "")))
+           freq=f"{r2.Freq/1e6:.3f} MHz" 
+           self.rig2_freq_label.setText(f"{freq}")
+
+
        except Exception:
            pass
        try:
-           self.rig2_vfo_label.setText("VFOB" if getattr(r2, "Vfo", 0) else "VFOA")
+           #self.rig2_vfo_label.setText("VFOB" if getattr(r2, "Vfo", 0) else "VFOA")
+           self.rig2_vfo_label.setText(str(r2.Vfo))
+
        except Exception:
            pass
 
@@ -1380,7 +1415,7 @@ class MainWindow(QMainWindow):
        global mutex,lastCmd
        print(f"SendCAT Command: {command_str} Length: {reply_length} End: {reply_end}")
        if self.ready_rig_label.text() != "(FT-2000)":
-            print("Custom Command CAT only available for FT-2000")
+            print(f"Custom Command CAT only available for FT-2000 ({self.ready_rig_label.text()})")
             lastCmd=""
             mutex=False
             return ""
