@@ -80,7 +80,14 @@ Notas de uso
 - Para actualizar las etiquetas numéricas de Power/Volumen, utilizar MainWindow.slider_power.setValue(...) o MainWindow.slider_vol.setValue(...); los handlers internos llamarán a _handle_slider_change/_refresh_sliders que actualizan las etiquetas y persisten valores.
 - Para persistir manualmente el estado actual en el fichero de configuración, MainWindow._write_config() escribe SIGNAL, RIG, ANT, VFO, POWER y VOLUME en el archivo configurado.
 
+Controles añadidos recientemente
+
+- MUTE: Botón compuesto con LED integrado llamado MUTE ubicado debajo de TUNE (no altera la posición del resto de controles). Accesible como MainWindow.mute (instancia de LedButton). Al hacer clic alterna su estado lógico (0=desactivado / 1=activado) y dispara el handler interno MainWindow._on_mute(state) donde state es entero 0/1. Visualmente el LED usa color rojo cuando está en modo MUTE.
+
+- QRP mode (QRP / MID / LP): Grupo de tres radio buttons mutuamente exclusivos añadidos para selección de modos de potencia. Botones expuestos como MainWindow.rb_qrp, MainWindow.rb_mid y MainWindow.rb_lp y agrupados en MainWindow.qrp_group. El cambio de selección dispara el handler interno MainWindow._on_qrp_changed(button) con el botón seleccionado.
+
 Funciones a nivel de módulo
 - updateRigStatus(omni, win): función pública que consulta el estado de OmniRig y actualiza etiquetas de rigs y estado Online/Offline llamando a win.set_ready(...).
 
+Última actualización: 2025-12-11T13:51:46.776Z
 
