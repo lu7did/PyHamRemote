@@ -262,6 +262,7 @@ class LedButton(QWidget):
         self._place_led()
         # ensure initial visual state and label and LED color
         self._state = 0
+
         # keep the provided label (e.g., "RX" or "TUNE")
         self._button.setText(label)
         self._led.set_color_on((0, 255, 0))
@@ -282,13 +283,13 @@ class LedButton(QWidget):
             if self._state:
                 # TX: vivid red and ON
                 self._led.set_color_on((255, 0, 0))
-                self._button.setText("TX")
-                self._led.set_on(True)
+                #self._button.setText("TX")
+                self._led.set_on(False)
             else:
                 # RX: lime green and ON
                 self._led.set_color_on((0, 255, 0))
-                self._button.setText("RX")
-                self._led.set_on(True)
+                #self._button.setText("RX")
+                self._led.set_on(False)
 
     def get_state(self) -> int:
         return self._state
@@ -388,7 +389,7 @@ class TuneButton(LedButton):
         print("Tune button clicked")
 
 #*--- TUNE CAT command
-
+        
         resp=self.win.SendCAT(self.win.omni.Rig1,"AC002;",0,";")
         QTimer.singleShot(1000, self._restore)
         self._restore()
@@ -435,6 +436,18 @@ class OmniRigEvents:
             # Get_StatusStr es una propiedad del RigX
             status = rig.StatusStr
             print(f"[EVENT] StatusChangeEvent: rig={RigNumber}, status='{status}'",flush=True)
+            if status=="On-line":
+               self.win.ready_led.set_on(True)
+               self.win.ready_label.setText("Online")
+               #rigName=rig.RigName
+               if RigNumber==1:
+                  self.win.ready_rig_label.setText(f"({self.win.omni.Rig1.RigType})")
+               else:
+                  self.win.ready_rig_label.setText(f"({self.win.omni.Rig2.RigType})")
+            else:
+               self.win.ready_led.set_on(False)
+               self.win.ready_label.setText("Offline")
+               self.win.ready_rig_label.setText("")      
         except Exception as e:
             print(f"[EVENT] StatusChangeEvent: rig={RigNumber}, error leyendo estado: {e}",flush=True)
         if mutex==True:
@@ -464,10 +477,27 @@ class MainWindow(QMainWindow):
         self.setWindowTitle("Remote rig control console")
         central = QWidget()
         self.setCentralWidget(central)
+    # ----------------------------------------------------------------------
+    # CREAR OBJETO COM proceso con OmniRig
+    # ----------------------------------------------------------------------
+
+        pythoncom.CoInitialize()
+        self.omni = win32com.client.DispatchWithEvents("OmniRig.OmniRigX", OmniRigEvents)
+
+        #* DEBUG Make Settings window visible --- self.omni.DialogVisible=Tru
+        OmniRigEvents.win=self
+
+        self.rig1 = self.omni.Rig1
+        self.rig2 = self.omni.Rig2
+
+
+
+
 
         self.meter = VUMeter(segments=10)
         # single toggle button starting in RX state (0)
         self.tr = LedButton("RX")
+
         # make TR button slightly narrower (closer to right edge)
         try:
             self.tr._button.setMinimumWidth(70)
@@ -549,8 +579,10 @@ class MainWindow(QMainWindow):
         right_col.addWidget(self.vfo, alignment=Qt.AlignRight)
         right_col.addStretch()
         right_col.addWidget(self.tune, alignment=Qt.AlignRight)
+
         # add MUTE button below TUNE without altering other positions
-        self.mute = LedButton("MUTE", color_on=(255, 0, 0))
+
+        self.mute = LedButton("MUTE", color_on=(0, 255, 0))
         try:
             self.mute._button.setMinimumWidth(70)
         except Exception:
@@ -558,7 +590,17 @@ class MainWindow(QMainWindow):
         right_col.addWidget(self.mute, alignment=Qt.AlignRight)
         # emit event when mute toggled
         self.mute._button.clicked.connect(lambda: self._on_mute(self.mute.get_state()))
-
+        if self.getVol()==0:
+            self.mute._state = 1
+            self.mute._led.set_on(True)
+            self.mute._led.set_color_on((255, 0, 0))
+            self.mute._button.setText("MUTE")
+        else:
+            self.mute._state = 0
+            self.mute._led.set_on(False)
+            self.mute._led.set_color_on((255, 0, 0))
+            self.mute._button.setText("MUTE")            
+        
         # place meter at row 1 left
         grid.addWidget(self.meter, 1, 0)
 
@@ -675,10 +717,12 @@ class MainWindow(QMainWindow):
         self.slider_power = QSlider(Qt.Horizontal)
         self.slider_power.setRange(0, 255)
         self.slider_power.setValue(0)
+
         # connect power slider to isolated handler
         self.slider_power.valueChanged.connect(lambda v, s=self.slider_power: self._handle_slider_change('power', v, s))
         self.slider_power.setFixedWidth(slider_width)
         self.slider_power_value = QLabel("0")
+
         power_row = QHBoxLayout()
         power_row.setContentsMargins(0, 0, 0, 0)
         power_row.setSpacing(6)
@@ -687,22 +731,34 @@ class MainWindow(QMainWindow):
         power_row.addWidget(self.slider_power_value)
         slider_vlayout.addLayout(power_row)
 
+#*---------
         self.slider_vol_label = QLabel("Volumen")
         self.slider_vol_label.setFixedWidth(label_width)
+
         self.slider_vol = QSlider(Qt.Horizontal)
         self.slider_vol.setRange(0, 255)
-        self.slider_vol.setValue(0)
+
+
         # connect volume slider to isolated handler
         self.slider_vol.valueChanged.connect(lambda v, s=self.slider_vol: self._handle_slider_change('volume', v, s))
         self.slider_vol.setFixedWidth(slider_width)
         self.slider_vol_value = QLabel("0")
+
+
         vol_row = QHBoxLayout()
         vol_row.setContentsMargins(0, 0, 0, 0)
         vol_row.setSpacing(6)
         vol_row.addWidget(self.slider_vol_label)
         vol_row.addWidget(self.slider_vol)
         vol_row.addWidget(self.slider_vol_value)
+
         slider_vlayout.addLayout(vol_row)
+
+        v=self.getVol()      
+        self._handle_slider_change('volume', v, self.slider_vol)
+
+#*-----------
+
 
         # place sliders below (row 4) to avoid overlapping with rig controls
         grid.addLayout(slider_vlayout, 4, 1, Qt.AlignLeft)
@@ -714,26 +770,58 @@ class MainWindow(QMainWindow):
         self._update_ready_rig_label()
 
         main_layout = grid
+        
         # Example: connect button click to print state
-        self.tr._button.clicked.connect(lambda: print(f"TR state: {self.tr.get_state()}"))
+        self.tr._button.clicked.connect(lambda: print(f"TR state: {self.setTX(self.tr.get_state())}"))
+
         # connect VFO change printing
         self.vfo._button.clicked.connect(lambda: self._on_vfo_changed(self.vfo.get_state()))
         # connect swap button
         self.swap._button.clicked.connect(lambda: self._on_swap())
 
         self.resize(360, 100)
-    # ----------------------------------------------------------------------
-    # CREAR OBJETO COM proceso con OmniRig
-    # ----------------------------------------------------------------------
+    
+#*--------------------------------------------------------------------------------------
+#* Handle interaction with rig using OmniRig
+#*--------------------------------------------------------------------------------------
+    def setTX(self, value: int):
+        if self.rb_rig1.isChecked():
+            rig=self.omni.Rig1
+            rigName=rig.RigType
+        else:
+            rig=self.omni.Rig2
+            rigName=rig.RigType
 
-        pythoncom.CoInitialize()
-        self.omni = win32com.client.DispatchWithEvents("OmniRig.OmniRigX", OmniRigEvents)
 
-        #* DEBUG Make Settings window visible --- self.omni.DialogVisible=Tru
-        OmniRigEvents.win=self
-
-        self.rig1 = self.omni.Rig1
-        self.rig2 = self.omni.Rig2
+        if value==1:
+           self.tr._state = value
+           self.tr._led.set_color_on((255, 0, 0))
+           self.tr._led.set_on(True)    
+           self.tr._button.setText("TX") 
+           rig.Tx= 0x00400000
+           print(f"Turn on TX rig({rigName})")
+           return value
+        self.tr._state = value
+        self.tr._led.set_color_on((0, 255, 0))
+        self.tr._led.set_on(True)    
+        self.tr._button.setText("RX") 
+        rig.Tx=0x00200000
+        print(f"Turn on RX rig({rigName})")
+        return value
+    def getVol(self):
+    
+        resp=self.SendCAT(self.omni.Rig1,"AG0;",0,";")
+        if resp == '':
+           return 0
+        vol=int(resp[3:6])
+        print(f"Valor inicial Rig Response es {resp} Volume({vol})")
+        return vol
+        
+    def setVol(self, vol):
+    
+        cmd=f"AG0{vol:0{3}d};"
+        resp=self.SendCAT(self.omni.Rig1,cmd,0,";")
+        return
 
 
 #*--------------------------------------------------------------------------------------
@@ -853,6 +941,13 @@ class MainWindow(QMainWindow):
 
     def set_tr(self, value: int) -> None:
         """Set toggle indicator to 0 (RX) or 1 (TX)."""
+        
+        print(f"Set TR called with value={value} ")
+        if self.rb_rig1.isChecked():
+           print("rig1 is checked")
+        else:
+            print("rig2 is checked")
+        
         self.tr.set_state(value)
 
     def set_ready(self, enabled: bool) -> None:
@@ -982,7 +1077,6 @@ class MainWindow(QMainWindow):
         try:
             name = button.text() if hasattr(button, "text") else str(button)
             print(f"Rig selected: {name}")
-            print("Paso por on_rig_changed")
         except Exception:
             pass
         # update ready-side label
@@ -996,6 +1090,7 @@ class MainWindow(QMainWindow):
         except Exception:
             pass
         try:
+            print("Updating rig status after rig change")
             self.updateRigStatus()
         except Exception:
             pass
@@ -1072,15 +1167,11 @@ class MainWindow(QMainWindow):
                 self.slider_power_value.setText(f"{disp}W")
                 print(f"Power level (slider={int(value)}): {disp}")
             elif name == 'volume' and slider_obj is self.slider_vol:
+                
                 disp = self._volume_display_from_slider(int(value))
                 self.slider_vol_value.setText(str(disp))
                 print(f"Volume level handled (slider={int(value)}): {disp}")
-                CATcmd=f"AG0{value:03d};"
-                resp=self.SendCAT(self.omni.Rig1,CATcmd,0,";")
-                #QTimer.singleShot(1000, self._CATdelay)
-                print(f"handle_slider_change(): CAT {CATcmd} ended response {resp}")
-                resp=self.SendCAT(self.omni.Rig1,"AG0;",0,";")
-                print(f"Valor corriente del cursor de volumen {resp}")
+                print(f"slider_vol_value {self.slider_vol_value.text()} slider({self.slider_vol.value()}) vol({value})")
 
             else:
                 return
@@ -1134,15 +1225,51 @@ class MainWindow(QMainWindow):
     def _on_mute(self, state: int) -> None:
         """Handler called when MUTE button is toggled. State: 0=unmuted, 1=muted."""
         try:
+            print(f"_on_mute rig is {self.ready_rig_label.text()}")
+            if self.ready_rig_label.text() != "(FT-2000)":
+                print("MUTE function only available for FT-2000")
+                return
+
             print(f"MUTE toggled: {int(state)}")
+            if state==0:
+               
+                self.mute._button.setText("MUTE")   
+                self.mute._led.set_color_on((255, 0, 0))
+                self.mute._led.set_on(False)
+                CATcmd="AG0030;"
+                resp=self.SendCAT(self.omni.Rig1,CATcmd,0,";")
+            else:
+                
+                self.mute._button.setText("MUTE")   
+                self.mute._led.set_color_on((255,0, 0))
+                self.mute._led.set_on(True)
+                CATcmd="AG0000;"
+                resp=self.SendCAT(self.omni.Rig1,CATcmd,0,";")
+             
         except Exception:
             pass
 
+    def setPower(self, power: int) -> None:
+        resp=self.SendCAT(self.omni.Rig1,f"PC{power:0{3}d};",0,";")   
+        print(f"Response to Power change; is {resp}")
+        return  
+    
     def _on_qrp_changed(self, button) -> None:
         """Handler called when QRP/MID/LP selection changes."""
         try:
             name = button.text() if hasattr(button, "text") else str(button)
             print(f"QRP mode selected: {name}")
+            if name == "QRP":
+                print("Set QRP mode")
+                self.setPower(13)
+            elif name == "MID":
+                print("Set MID mode")   
+                self.setPower(128)
+            elif name == "LP":
+                print("Set LP mode")
+                self.setPower(255)
+
+
         except Exception:
             pass
 
@@ -1217,8 +1344,13 @@ class MainWindow(QMainWindow):
     def SendCAT(self,rig, command_str,reply_length,reply_end):
 
        global mutex,lastCmd
+       print(f"SendCAT Command: {command_str} Length: {reply_length} End: {reply_end}")
+       if self.ready_rig_label.text() != "(FT-2000)":
+            print("Custom Command CAT only available for FT-2000")
+            lastCmd=""
+            mutex=False
+            return ""
        command_bytes = command_str.encode("ascii")
-       print(f"Received CAT[{command_bytes}]")
        mutex=True       
        rig.SendCustomCommand(command_bytes,reply_length,reply_end)
        lastCmd=""
@@ -1227,7 +1359,6 @@ class MainWindow(QMainWindow):
            while mutex==True:
                pythoncom.PumpWaitingMessages()
                if mutex == False:
-                  print(f"Respuesta ({lastCmd})")
                   return lastCmd
        except Exception:
            pass
@@ -1254,7 +1385,7 @@ def main(argv: list[str] | None = None) -> int:
 
     parser.add_argument(
         "-c", "--command",
-        required=True,
+        #required=True,
         help="Comando CAT a enviar (string literal, ej.: 'FA;' o 'MG;')."
     )
 
