@@ -195,29 +195,20 @@ async def remote_client_task(host: str,
 
             # Si pasa el filtro, lo mostramos por stdout y lo enviamos a los clientes.
 
-            #print(line)
             cluster = from_.split("-", 1)[0]
-            #newline=f"DX de LU7DZ:    {freq}  {callsign}           {mode}    {snr} dB  {speed} WPM  {activity}      {timestamp}   fm:{cluster}#"
-            #newline=f"DX de LT7D:    {freq}  {callsign}           {mode}    {snr} dB  {speed} WPM  fm:{cluster}#      {timestamp}   fm:{cluster}#"
-            #newline=f"DX de LT7D:    {freq}  {callsign}           {mode}    {int(snr):2d} dB  {speed} WPM CQ      {timestamp} fm:{cluster}#"
-            f=freq.rjust(10)
-            cl=callsign.replace("#","")
-            cl=cl.ljust(12)
-            from datetime import date
-            from datetime import datetime
-            today = date.today()
-            d = today.strftime("%d-%m-%Y")
-            c = f"{cluster}#"
-            c = c[:10]
-            c = c.ljust(8)
-            t = f"{snr.rjust(2)} dB {speed.rjust(2)} WPM fm:{c}"
-            t = t[:30].ljust(30)
-            if len(timestamp)<5:
-               now = datetime.now()
-               timestamp = now.strftime("%H:%M")
-            else:
-               timestamp=timestamp[:5].ljust(5)
-            newline=f"{f} {cl}{d} {timestamp} {t} <LU7DZ>" 
+            spot=f"DX de LU2EIC-#:"
+            spot=spot.ljust(15)
+            f=freq.rjust(9)
+            cl=f"LU7DZ"
+            cl=cl.replace("#","")
+            cl=cl.ljust(13)
+            snr=snr.rjust(2)
+            snr=f"{snr} dB"
+            speed=speed.rjust(2)
+            speed=f"{speed} WPM"
+            msg=f"{mode} {snr} {speed} CQ {cluster}-#"
+            msg=msg.ljust(31)
+            newline=f"{spot}{f}  {cl}{msg}{timestamp}" 
             print(newline,end="\n")
             await broadcast_to_clients(newline)
 
