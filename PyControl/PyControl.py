@@ -130,10 +130,22 @@ def build_window() -> QWidget:
         except Exception:
             pass
 
-    # label above the meter (tighter margins)
+    # label + small LED above the meter (tighter margins)
     label_signal = QLabel("Signal")
     label_signal.setContentsMargins(0, 0, 0, 2)
-    layout.addWidget(label_signal)
+    # LED placed immediately to the right of the label
+    signal_led = LedIndicator(diameter=10)
+    # start with dark green off (we'll toggle colors via timer)
+    signal_led.set_color_on((0, 100, 0))
+    signal_led.set_on(True)
+
+    signal_row = QHBoxLayout()
+    signal_row.setContentsMargins(0, 0, 0, 0)
+    signal_row.setSpacing(6)
+    signal_row.addWidget(label_signal)
+    signal_row.addWidget(signal_led)
+    signal_row.addStretch()
+    layout.addLayout(signal_row)
 
     # Mode selector placed on the same row as the meter (right-aligned)
     from PyQt5.QtWidgets import QComboBox
@@ -159,6 +171,27 @@ def build_window() -> QWidget:
     meter_row.addStretch()
     meter_row.addWidget(mode_selector, alignment=Qt.AlignRight | Qt.AlignVCenter)
     layout.addLayout(meter_row)
+
+    # timer to toggle the small signal LED once per second, alternate colors
+    try:
+        from PyQt5.QtCore import QTimer
+        win._signal_led_state = False
+        def _toggle_signal_led() -> None:
+            try:
+                if getattr(win, '_signal_led_state', False):
+                    signal_led.set_color_on((0, 100, 0))
+                else:
+                    signal_led.set_color_on((0, 255, 0))
+                signal_led.set_on(True)
+                win._signal_led_state = not getattr(win, '_signal_led_state', False)
+            except Exception:
+                pass
+        timer = QTimer()
+        timer.timeout.connect(_toggle_signal_led)
+        timer.start(1000)
+        win._signal_timer = timer
+    except Exception:
+        pass
 
     # Two-row table with headers: '', rig, name, status, freq, mode
     from PyQt5.QtWidgets import QGridLayout, QRadioButton, QButtonGroup
