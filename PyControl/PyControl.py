@@ -86,6 +86,50 @@ def build_window() -> QWidget:
     layout.setSpacing(2)
     layout.setContentsMargins(8, 6, 8, 6)
 
+    # configuration persistence helpers (PyControl.ini in this folder)
+    cfg_path = Path(__file__).resolve().parent / 'PyControl.ini'
+
+    def _read_cfg() -> dict:
+        cfg = {}
+        try:
+            if cfg_path.exists():
+                for line in cfg_path.read_text().splitlines():
+                    line = line.strip()
+                    if not line or line.startswith('#'):
+                        continue
+                    if '=' in line:
+                        k, v = line.split('=', 1)
+                        cfg[k.strip()] = v.strip()
+            else:
+                # generate defaults
+                cfg = {
+                    'RIG': 'rig1',
+                    'LEFT': 'Signal',
+                    'ANT': 'ant 1',
+                    'VFO': 'VFO A',
+                    'MODE': 'CW',
+                    'POWER': '0',
+                    'VOLUME': '0'
+                }
+                _write_cfg(cfg)
+        except Exception:
+            pass
+        return cfg
+
+    def _write_cfg(cfg: dict) -> None:
+        try:
+            cfg_path.write_text('\n'.join(f"{k}={v}" for k, v in cfg.items()) + '\n')
+        except Exception:
+            pass
+
+    def _save_key(key: str, value: str) -> None:
+        try:
+            cfg = _read_cfg()
+            cfg[key] = str(value)
+            _write_cfg(cfg)
+        except Exception:
+            pass
+
     # label above the meter (tighter margins)
     label_signal = QLabel("Signal")
     label_signal.setContentsMargins(0, 0, 0, 2)
@@ -99,7 +143,13 @@ def build_window() -> QWidget:
     mode_selector.addItems(["CW", "USB", "LSB", "AM", "FM", "DIG-U", "DIG-L", "CW-R"])
     mode_selector.setFixedWidth(110)
     mode_selector.setCurrentIndex(0)
-    mode_selector.currentTextChanged.connect(lambda t: print(f"Mode selector changed: {t}"))
+    def _on_mode_changed(t: str) -> None:
+        try:
+            print(f"Mode selector changed: {t}")
+            _save_key('MODE', t)
+        except Exception:
+            pass
+    mode_selector.currentTextChanged.connect(_on_mode_changed)
 
     # meter row: meter at left, mode selector at right
     meter_row = QHBoxLayout()
@@ -195,6 +245,7 @@ def build_window() -> QWidget:
             else:
                 sel = 'unknown'
             print(f"Rig selected: {sel}")
+            _save_key('RIG', sel)
         except Exception:
             pass
 
@@ -231,8 +282,15 @@ def build_window() -> QWidget:
             pass
 
     power_slider.valueChanged.connect(_on_power_change)
-    # connect Set button to emit a simple console event with current slider value
-    set_btn.clicked.connect(lambda _=False, s=power_slider: print(f"Set button pressed: power={s.value()}"))
+    # connect Set button to emit a simple console event with current slider value and persist
+    def _on_power_set(_=False):
+        try:
+            val = int(power_slider.value())
+            print(f"Set button pressed: power={val}")
+            _save_key('POWER', str(val))
+        except Exception:
+            pass
+    set_btn.clicked.connect(_on_power_set)
 
     power_row.addWidget(power_label)
     power_row.addWidget(power_slider)
@@ -264,7 +322,14 @@ def build_window() -> QWidget:
             pass
 
     volume_slider.valueChanged.connect(_on_volume_change)
-    volume_set_btn.clicked.connect(lambda _=False, s=volume_slider: print(f"Set button pressed: volume={s.value()}"))
+    def _on_volume_set(_=False):
+        try:
+            val = int(volume_slider.value())
+            print(f"Set button pressed: volume={val}")
+            _save_key('VOLUME', str(val))
+        except Exception:
+            pass
+    volume_set_btn.clicked.connect(_on_volume_set)
 
     volume_row.addWidget(volume_label)
     volume_row.addWidget(volume_slider)
@@ -299,7 +364,9 @@ def build_window() -> QWidget:
 
     def _on_left_changed(button) -> None:
         try:
-            print(f"Left group selected: {button.text()}")
+            txt = button.text()
+            print(f"Left group selected: {txt}")
+            _save_key('LEFT', txt)
         except Exception:
             pass
 
@@ -320,7 +387,9 @@ def build_window() -> QWidget:
 
     def _on_mid_changed(button) -> None:
         try:
-            print(f"Antenna selected: {button.text()}")
+            txt = button.text()
+            print(f"Antenna selected: {txt}")
+            _save_key('ANT', txt)
         except Exception:
             pass
 
@@ -341,7 +410,9 @@ def build_window() -> QWidget:
 
     def _on_right_changed(button) -> None:
         try:
-            print(f"VFO selected: {button.text()}")
+            txt = button.text()
+            print(f"VFO selected: {txt}")
+            _save_key('VFO', txt)
         except Exception:
             pass
 
@@ -355,6 +426,67 @@ def build_window() -> QWidget:
     groups_row.addWidget(right_box)
 
     layout.addLayout(groups_row)
+
+    # Apply persisted configuration (if any) to initialize control states
+    try:
+        cfg = _read_cfg()
+        # rig
+        r = cfg.get('RIG', 'rig1')
+        rig1_radio.blockSignals(True)
+        rig2_radio.blockSignals(True)
+        if r == 'rig2':
+            rig2_radio.setChecked(True)
+        else:
+            rig1_radio.setChecked(True)
+        rig1_radio.blockSignals(False)
+        rig2_radio.blockSignals(False)
+        # left group
+        left_val = cfg.get('LEFT', 'Signal')
+        for b in (rb_swr, rb_power, rb_signal):
+            b.blockSignals(True)
+            if b.text() == left_val:
+                b.setChecked(True)
+            b.blockSignals(False)
+        # mid group (antenna)
+        ant_val = cfg.get('ANT', 'ant 1')
+        for b in (rb_ant1, rb_ant2):
+            b.blockSignals(True)
+            if b.text() == ant_val:
+                b.setChecked(True)
+            b.blockSignals(False)
+        # right group (VFO)
+        vfo_val = cfg.get('VFO', 'VFO A')
+        for b in (rb_vfoa, rb_vfob):
+            b.blockSignals(True)
+            if b.text() == vfo_val:
+                b.setChecked(True)
+            b.blockSignals(False)
+        # mode selector
+        mode_val = cfg.get('MODE', 'CW')
+        idx = mode_selector.findText(mode_val)
+        if idx >= 0:
+            mode_selector.blockSignals(True)
+            mode_selector.setCurrentIndex(idx)
+            mode_selector.blockSignals(False)
+        # sliders initial values from cfg (do not persist on change)
+        try:
+            p = int(cfg.get('POWER', '0'))
+            power_slider.blockSignals(True)
+            power_slider.setValue(p)
+            power_value.setText(str(p))
+            power_slider.blockSignals(False)
+        except Exception:
+            pass
+        try:
+            v = int(cfg.get('VOLUME', '0'))
+            volume_slider.blockSignals(True)
+            volume_slider.setValue(v)
+            volume_value.setText(str(v))
+            volume_slider.blockSignals(False)
+        except Exception:
+            pass
+    except Exception:
+        pass
 
     # small row of buttons (keep previous functionality)
     from PyQt5.QtWidgets import QFrame
