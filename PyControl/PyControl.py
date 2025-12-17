@@ -77,7 +77,7 @@ VFOButton = getattr(_pym, 'VFOButton')
 SwapButton = getattr(_pym, 'SwapButton')
 
 
-def build_window() -> QWidget:
+def build_window(debug: bool = False) -> QWidget:
     """Build a compact control window reusing widgets from PyMeter."""
     win = QWidget()
     win.setWindowTitle('PyControl - Remote Console')
@@ -303,6 +303,7 @@ def build_window() -> QWidget:
     from PyQt5.QtWidgets import QCheckBox
     power_enable_cb = QCheckBox()
     power_enable_cb.setChecked(True)
+    power_enable_cb.setVisible(debug)
     power_slider = QSlider(Qt.Horizontal)
     power_slider.setRange(0, 255)
     power_slider.setValue(0)
@@ -384,6 +385,7 @@ def build_window() -> QWidget:
     # checkbox controlling the Volume group enabled state
     volume_enable_cb = QCheckBox()
     volume_enable_cb.setChecked(True)
+    volume_enable_cb.setVisible(debug)
     volume_slider = QSlider(Qt.Horizontal)
     volume_slider.setRange(0, 255)
     volume_slider.setValue(0)
@@ -535,10 +537,13 @@ def build_window() -> QWidget:
     from PyQt5.QtWidgets import QCheckBox
     left_enable_cb = QCheckBox()
     left_enable_cb.setChecked(True)
+    left_enable_cb.setVisible(debug)
     mid_enable_cb = QCheckBox()
     mid_enable_cb.setChecked(True)
+    mid_enable_cb.setVisible(debug)
     right_enable_cb = QCheckBox()
     right_enable_cb.setChecked(True)
+    right_enable_cb.setVisible(debug)
 
     groups_row.addWidget(left_enable_cb)
     groups_row.addWidget(left_box)
@@ -725,12 +730,16 @@ def build_window() -> QWidget:
     from PyQt5.QtWidgets import QCheckBox
     tr_cb = QCheckBox()
     tr_cb.setChecked(True)
+    tr_cb.setVisible(debug)
     mute_cb = QCheckBox()
     mute_cb.setChecked(True)
+    mute_cb.setVisible(debug)
     split_cb = QCheckBox()
     split_cb.setChecked(True)
+    split_cb.setVisible(debug)
     tune_cb = QCheckBox()
     tune_cb.setChecked(True)
+    tune_cb.setVisible(debug)
 
     def _set_button_enabled(btn_obj, checkbox, enabled: bool) -> None:
         try:
@@ -929,10 +938,11 @@ def build_window() -> QWidget:
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(description='PyControl GUI (reusing PyMeter widgets)')
     parser.add_argument('--test', action='store_true', help='Animate meter for testing')
+    parser.add_argument('--debug', action='store_true', help='Show debug controls (checkboxes for Enabled)')
     args = parser.parse_args(argv)
 
     app = QApplication(sys.argv if argv is None else argv)
-    win = build_window()
+    win = build_window(debug=bool(args.debug))
     win.show()
 
     # initial state
