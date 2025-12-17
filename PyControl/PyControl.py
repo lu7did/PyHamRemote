@@ -301,7 +301,7 @@ def build_window() -> QWidget:
     power_label.setMinimumWidth(50)
     # checkbox to toggle enabled state for the power control group
     from PyQt5.QtWidgets import QCheckBox
-    power_enable_cb = QCheckBox('Enabled')
+    power_enable_cb = QCheckBox()
     power_enable_cb.setChecked(True)
     power_slider = QSlider(Qt.Horizontal)
     power_slider.setRange(0, 255)
@@ -381,6 +381,9 @@ def build_window() -> QWidget:
 
     volume_label = QLabel('Volume')
     volume_label.setMinimumWidth(50)
+    # checkbox controlling the Volume group enabled state
+    volume_enable_cb = QCheckBox()
+    volume_enable_cb.setChecked(True)
     volume_slider = QSlider(Qt.Horizontal)
     volume_slider.setRange(0, 255)
     volume_slider.setValue(0)
@@ -391,6 +394,8 @@ def build_window() -> QWidget:
 
     def _on_volume_change(v: int) -> None:
         try:
+            if not getattr(win, '_volume_enabled', True):
+                return
             volume_value.setText(str(int(v)))
             print(f"Volume slider changed: {int(v)}")
         except Exception:
@@ -399,6 +404,8 @@ def build_window() -> QWidget:
     volume_slider.valueChanged.connect(_on_volume_change)
     def _on_volume_set(_=False):
         try:
+            if not getattr(win, '_volume_enabled', True):
+                return
             val = int(volume_slider.value())
             print(f"Set button pressed: volume={val}")
             _save_key('VOLUME', str(val))
@@ -406,12 +413,42 @@ def build_window() -> QWidget:
             pass
     volume_set_btn.clicked.connect(_on_volume_set)
 
+    # enable/disable helper for the volume control group
+    win._volume_enabled = True
+    def set_volume_enabled(enabled: bool) -> None:
+        try:
+            en = bool(enabled)
+            win._volume_enabled = en
+            volume_slider.setEnabled(en)
+            volume_set_btn.setEnabled(en)
+            volume_enable_cb.setChecked(en)
+            if en:
+                volume_label.setStyleSheet("")
+                volume_value.setStyleSheet("")
+            else:
+                volume_label.setStyleSheet("color: #888888;")
+                volume_value.setStyleSheet("color: #888888;")
+        except Exception:
+            pass
+
+    set_volume_enabled(True)
+    # wire checkbox to enable/disable
+    try:
+        volume_enable_cb.stateChanged.connect(lambda s: set_volume_enabled(s == 2))
+    except Exception:
+        pass
+
+    volume_row.addWidget(volume_enable_cb)
     volume_row.addWidget(volume_label)
     volume_row.addWidget(volume_slider)
     volume_row.addWidget(volume_value)
     volume_row.addWidget(volume_set_btn)
 
     layout.addLayout(volume_row)
+
+    # expose volume control enable API
+    setattr(win, 'set_volume_enabled', set_volume_enabled)
+    setattr(win, 'volume_enabled', lambda: getattr(win, '_volume_enabled', True))
 
     # Three radio groups row (between sliders and buttons)
     from PyQt5.QtWidgets import QRadioButton, QButtonGroup, QGroupBox, QComboBox
