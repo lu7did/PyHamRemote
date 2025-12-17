@@ -36,12 +36,38 @@ import importlib.util
 from typing import Any
 
 
+
+PM_SPLITON = 0x00008000
+PM_SPLITOFF= 0x00010000
+PM_CW_U    = 0x00800000
+PM_CW_L    = 0x01000000
+PM_USB     = 0x02000000
+PM_LSB     = 0x04000000
+PM_DIG_U   = 0x08000000  
+PM_DIG_L   = 0x10000000
+PM_AM      = 0x20000000
+PM_FM      = 0x40000000
+
 try:
    import pythoncom
    import win32com.client
    omni=None
+   win=None
+   mutex=None
+   power_enable_cb=None
+   volume_enable_cb=None
+   left_enable_cb=None
+   mid_enable_cb=None
+   right_enable_cb=None
+   tr_cb=None
+   mute_cb=None
+   split_cb=None
+   tune_cb=None
+   splitState=0
+
 except:
    print("Not a Win32 environment, dependencies not satisfied, only GUI evaluation mode")
+
 
 # Allow running on Linux/headless systems by passing --linux; when present
 # create proper dummy module objects for pythoncom and win32com.client so
@@ -83,16 +109,94 @@ else:
     # do not inject dummies; allow real win32com/pythoncom to be used on Windows
     pass
 
+
+
+#*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=
+def setPush(n):
+    global omni, win,mutex,power_enable_cb,volume_enable_cb,left_enable_cb,mid_enable_cb,right_enable_cb,tr_cb,mute_cb,split_cb,tune_cb,splitState
+    try:
+       if n=="Split":
+          print(f"Split button pressed checked({splitState})")
+                
+       return n
+    except Exception as e:
+       print(f"updateStatus() exception {e}")
+       pass
+    return n
+
+def updateStatus():
+    global omni, win,mutex,power_enable_cb,volume_enable_cb,left_enable_cb,mid_enable_cb,right_enable_cb,tr_cb,mute_cb,split_cb,tune_cb
+    try:
+       rig1=omni.Rig1
+       rig2=omni.Rig2
+
+       win.rig1_name.setText(rig1.RigType)
+       win.rig1_freq_label.setText(str(rig1.Freq))
+       win.rig1_mode.setText(getMode(rig1.Mode))
+
+       if rig1.StatusStr == "On-line":
+          win.rig1_led.set_on(True)
+       else:
+          win.rig1_led.set_on(False)
+
+       win.rig2_name.setText(rig2.RigType)
+       win.rig2_freq_label.setText(str(rig2.Freq))
+       win.rig2_mode.setText(getMode(rig2.Mode))
+
+       if rig2.StatusStr == "On-line":
+          win.rig2_led.set_on(True)
+       else:
+          win.rig2_led.set_on(False)
+
+       if (rig1.RigType == "FT-2000" and win.rig1_radio.isChecked()) or (rig2.RigType == "FT-2000" and win.rig2_radio.isChecked()):
+             power_enable_cb.setChecked(True)
+             volume_enable_cb.setChecked(True)
+             right_enable_cb.setChecked(True)
+             mid_enable_cb.setChecked(True)
+             left_enable_cb.setChecked(True)
+
+             tr_cb.setChecked(True)
+             mute_cb.setChecked(True)
+             split_cb.setChecked(True)
+             tune_cb.setChecked(True)
+
+       else:
+             power_enable_cb.setChecked(False)
+             volume_enable_cb.setChecked(False)
+             right_enable_cb.setChecked(True)
+             left_enable_cb.setChecked(False)
+             mid_enable_cb.setChecked(False)
+
+             tr_cb.setChecked(False)
+             mute_cb.setChecked(False)
+             split_cb.setChecked(True)
+             tune_cb.setChecked(False)
+
+
+    except Exception as e:
+       print(f"updateStatus() exception {e}")
+       pass
+
+#*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=
+"""
+OmniRigEvents
+Handlers for all events managed by OmniRig
+"""
+#*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=
 class OmniRigEvents:
 
    try:  
       defaultNamedNotOptArg = pythoncom.Empty
    except:
       defaultNamedNotOptArg  = ""
-   win=None
+
 
    def __init__(self) -> None:
-       print("Omnirig event initialized")
+       print("[OmniRigEvents] Omnirig engine initialization completed")
+
+
+
+   #*--- Response to a custom command
 
    def OnCustomReply(self,RigNumber=defaultNamedNotOptArg,Command=defaultNamedNotOptArg,Reply=defaultNamedNotOptArg):
        global mutex,lastCmd,linux_flag
@@ -105,21 +209,28 @@ class OmniRigEvents:
           reply_bytes = Reply
           lastCmd=""
        mutex=False
+       updateStatus()
        print(f"Procesó [CustomReply] Rig={RigNumber} Cmd={Command!r} Reply={reply_bytes!r} MUTEX({mutex})")
 
-    # Se llamará cuando cambie la visibilidad de la ventana de OmniRig
+   #*--- Response to a change in the visible condition of the Omnirig's settings dialog
+
    def OnVisibleChange(self, RigNumber):
         global linux_flag
         if linux_flag:
            return
+        updateStatus()
         print(f"[EVENT] VisibleChangeEvent: rig={RigNumber}", flush=True)
 
-    # Se llamará cuando cambie el tipo de rig
+   #*--- Change the rig type
+
    def OnRigTypeChange(self, RigNumber):
         global linux_flag
         if linux_flag:
            return
+        updateStatus()
         print(f"[EVENT] RigTypeChangeEvent: rig={RigNumber}", flush=True)
+
+   #*--- Change the rig status
 
    def OnStatusChange(self, RigNumber):
         global mutex,linux_flag
@@ -134,23 +245,29 @@ class OmniRigEvents:
                print(f"[EVENT] OnStatusChange: rig={RigNumber} Freq({rig.Freq}) Mode({getMode(rig.Mode)})", flush=True)
             else:
                print(f"{RigNumber} Offline")
+            updateStatus()
         except Exception as e:
             print(f"[EVENT] StatusChangeEvent: rig={RigNumber}, error leyendo estado: {e}",flush=True)
         if mutex==True:
            mutex=False
-   # Call when frequency, mode or other parameter has been changed
+
+   #*--- Change in the parameter of the transceiver
+
    def OnParamsChange(self, RigNumber,e):
 
-        global linux_flag,omni
+        global linux_flag,omni,mutex
         if linux_flag:
            return
         try:
             rig = omni.Rig1 if RigNumber == 1 else omni.Rig2
+
             print(f"[EVENT] ParamsChangeEvent: rig={RigNumber} param:{e:08x} Freq({rig.Freq}) Mode({getMode(rig.Mode)})", flush=True)
+            updateStatus()
 
         except Exception as e:
-            print(f"[EVENT] ParamsChangeEvent: rig={RigNumber}, error leyendo params: {e:08x}", flush=True)
+            print(f"[EVENT] ParamsChangeEvent: rig={RigNumber}, error leyendo params: {e}", flush=True)
 
+#*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=
 
 # Locate the PyMeter.py file in the repository (assumes script lives in PyControl/)
 repo_root = Path(__file__).resolve().parents[1]
@@ -176,13 +293,25 @@ SwapButton = getattr(_pym, 'SwapButton')
 
 
 def build_window(debug: bool = False) -> QWidget:
-    global linux_flag,omni
+
+    global linux_flag,omni,win,power_enable_cb,volume_enable_cb,right_enable_cb,mid_enable_cb,left_enable_cb,tr_cb,mute_cb,split_cb,tune_cb,splitState
 
 
+    # ----------------------------------------------------------------------
+    # Creates GUI Dialog object and place all controls and handlers on it
+    # ----------------------------------------------------------------------
+
+    win = QWidget()
+    win.setWindowTitle('PyControl (c) LU7DZ 2025')
+    layout = QVBoxLayout(win)
+    # reduce vertical spacing so elements sit tightly
+    layout.setSpacing(2)
+    layout.setContentsMargins(8, 6, 8, 6)
 
     # ----------------------------------------------------------------------
     # Creates COM object to handle interaction with OmniRig
     # ----------------------------------------------------------------------
+
     pythoncom.CoInitialize()
     omni = win32com.client.DispatchWithEvents("OmniRig.OmniRigX", OmniRigEvents)
     rig1 = omni.Rig1
@@ -190,14 +319,6 @@ def build_window(debug: bool = False) -> QWidget:
     print(f"Initialized OmniRig rig1({omni.Rig1.RigType}) rig2({omni.Rig2.RigType})")
 
 
-
-    """Build a compact control window reusing widgets from PyMeter."""
-    win = QWidget()
-    win.setWindowTitle('PyControl (c) LU7DZ 2025')
-    layout = QVBoxLayout(win)
-    # reduce vertical spacing so elements sit tightly
-    layout.setSpacing(2)
-    layout.setContentsMargins(8, 6, 8, 6)
 
     # configuration persistence helpers (PyControl.ini in this folder)
     cfg_path = Path(__file__).resolve().parent / 'PyControl.ini'
@@ -297,6 +418,7 @@ def build_window(debug: bool = False) -> QWidget:
                     signal_led.set_color_on((0, 255, 0))
                 signal_led.set_on(True)
                 win._signal_led_state = not getattr(win, '_signal_led_state', False)
+                updateStatus()
             except Exception:
                 pass
         timer = QTimer()
@@ -335,8 +457,8 @@ def build_window(debug: bool = False) -> QWidget:
     rig1_name.setMinimumWidth(120)
     rig1_led = LedIndicator(diameter=10)
     # initial off (gray)
+    rig1_led.set_color_on((0, 255, 0))
     rig1_led.set_color_off((120, 120, 120))
-    rig1_led.set_color_on((120, 120, 120))
     rig1_led.set_on(False)
 
     # frequency label formatted as integer (Hz) with thousands sep, up to 435000000
@@ -365,7 +487,7 @@ def build_window(debug: bool = False) -> QWidget:
     rig2_name.setMinimumWidth(120)
     rig2_led = LedIndicator(diameter=10)
     rig2_led.set_color_off((120, 120, 120))
-    rig2_led.set_color_on((120, 120, 120))
+    rig2_led.set_color_on((0, 255, 0))
     rig2_led.set_on(False)
 
     rig2_freq_value = 7200000  # Hz as integer
@@ -806,6 +928,7 @@ def build_window(debug: bool = False) -> QWidget:
         pass
     try:
         split.set_state(0)
+        splitState=0
     except Exception:
         pass
     try:
@@ -828,6 +951,9 @@ def build_window(debug: bool = False) -> QWidget:
                     pass
                 try:
                     led.set_on(False)
+                    if b==split:
+                       omni.Rig1.Split=PM_SPLITOFF
+                       omni.Rig2.Split=PM_SPLITOFF
                 except Exception:
                     pass
         except Exception:
@@ -940,7 +1066,8 @@ def build_window(debug: bool = False) -> QWidget:
                 qbtn.clicked.disconnect()
             except Exception:
                 pass
-            qbtn.clicked.connect(lambda checked=False, n=name: print(f"Button event: {n}"))
+            #qbtn.clicked.connect(lambda checked=False, n=name: print(f"Button event: {n}"))
+            qbtn.clicked.connect(lambda checked=False, n=name: print(f"Button event: {setPush(n)}"))
         except Exception:
             # fallback: print on exception
             try:
@@ -1128,28 +1255,28 @@ def main(argv: list[str] | None = None) -> int:
 
 def setMode(rig,mStr):
   if mStr == "CW-U" or mStr == "CW":
-     rig.Mode =0x00800000
+     rig.Mode =PM_CW_U
      return
   if mStr == "CW-L":
-     rig.Mode =0x01000000
+     rig.Mode =PM_CW_L
      return
   if mStr == "USB":
-     rig.Mode =0x02000000
+     rig.Mode =PM_USB
      return
   if mStr == "LSB":
-     rig.Mode =0x04000000
+     rig.Mode =PM_LSB
      return
   if mStr == "DIG-U":
-     rig.Mode =0x08000000
+     rig.Mode =PM_DIG_U
      return
   if mStr == "DIG-L":
-     rig.Mode =0x10000000
+     rig.Mode =PM_DIG_L
      return
   if mStr == "AM":
-     rig.Mode =0x20000000
+     rig.Mode =PM_AM
      return
   if mStr == "FM":
-     rig.Mode =0x40000000
+     rig.Mode =PM_FM
      return
   print(f"ERROR. Mode {mStr} not valida. Ignored")
 #*------------------------------------------------------------------------------------
@@ -1160,21 +1287,21 @@ def getMode(m):
   padding = 6
   mode = m & 0xfff00000
   #print(f"Recibio m({m:#0{padding}x}) mode({mode:#0{padding}x})  ") 
-  if mode == 0x00800000:
+  if mode == PM_CW_U:
      return "CW-U"
-  if mode == 0x01000000:
+  if mode == PM_CW_L:
      return "CW-L"
-  if mode == 0x02000000:
+  if mode == PM_USB:
      return "USB"
-  if mode == 0x04000000:
+  if mode == PM_LSB:
      return "LSB"
-  if mode == 0x08000000:
+  if mode == PM_DIG_U:
      return "DIG-U"
-  if mode == 0x10000000:
+  if mode == PM_DIG_L:
      return "DIG-L"
-  if mode == 0x20000000:
+  if mode == PM_AM:
      return "AM"
-  if mode == 0x40000000:
+  if mode == PM_FM:
      return "FM"
   return "???"
 
