@@ -535,12 +535,44 @@ def build_window() -> QWidget:
         pass
     split = SwapButton('Split')
 
-    # Set sensible defaults
-    tr.set_state(0)
+    # Set logical state to RX (0) for buttons if supported, then force LED visuals to "off" (dark green)
+    try:
+        tr.set_state(0)
+    except Exception:
+        pass
     try:
         mute.set_state(0)
     except Exception:
         pass
+    try:
+        split.set_state(0)
+    except Exception:
+        pass
+    try:
+        tune.set_state(0)
+    except Exception:
+        pass
+
+    # Ensure LEDs show dark green off color and are turned off
+    for b in (tr, mute, split, tune):
+        try:
+            led = getattr(b, '_led', None)
+            if led is not None:
+                try:
+                    led.set_color_on((0, 255, 0))
+                except Exception:
+                    pass
+                try:
+                    led.set_color_off((0, 100, 0))
+                except Exception:
+                    pass
+                try:
+                    led.set_on(False)
+                except Exception:
+                    pass
+        except Exception:
+            pass
+
     try:
         # ensure Tune label uses requested capitalization
         tune._button.setText('Tune')
