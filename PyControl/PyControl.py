@@ -677,7 +677,7 @@ def build_window() -> QWidget:
         pass
     split = SwapButton('Split')
 
-    # Set logical state to RX (0) for buttons if supported, then force LED visuals to "off" (dark green)
+    # Set logical state to RX (0) for buttons if supported
     try:
         tr.set_state(0)
     except Exception:
@@ -695,7 +695,7 @@ def build_window() -> QWidget:
     except Exception:
         pass
 
-    # Ensure LEDs show dark green off color and are turned off
+    # Ensure default LED visuals are dark/off initially
     for b in (tr, mute, split, tune):
         try:
             led = getattr(b, '_led', None)
@@ -721,10 +721,93 @@ def build_window() -> QWidget:
     except Exception:
         pass
 
+    # per-button enable checkboxes (no labels) to the left of each button
+    from PyQt5.QtWidgets import QCheckBox
+    tr_cb = QCheckBox()
+    tr_cb.setChecked(True)
+    mute_cb = QCheckBox()
+    mute_cb.setChecked(True)
+    split_cb = QCheckBox()
+    split_cb.setChecked(True)
+    tune_cb = QCheckBox()
+    tune_cb.setChecked(True)
+
+    def _set_button_enabled(btn_obj, checkbox, enabled: bool) -> None:
+        try:
+            en = bool(enabled)
+            # update checkbox state
+            try:
+                checkbox.setChecked(en)
+            except Exception:
+                pass
+            # underlying QPushButton
+            qbtn = getattr(btn_obj, '_button', None) or btn_obj
+            try:
+                qbtn.setEnabled(en)
+            except Exception:
+                pass
+            # label style
+            try:
+                qbtn.setStyleSheet('' if en else 'color: #888888;')
+            except Exception:
+                pass
+            # led visuals
+            try:
+                led = getattr(btn_obj, '_led', None)
+                if led is not None:
+                    if en:
+                        # restore normal colors (green on, dim off)
+                        led.set_color_on((0, 255, 0))
+                        led.set_color_off((0, 100, 0))
+                    else:
+                        # gray dark
+                        led.set_color_on((120, 120, 120))
+                        led.set_color_off((80, 80, 80))
+                    led.set_on(False)
+            except Exception:
+                pass
+            # store state on window
+            try:
+                name = getattr(btn_obj, '_button', None).text() if getattr(btn_obj, '_button', None) else str(btn_obj)
+                setattr(win, f"_btn_{name}_enabled", en)
+            except Exception:
+                pass
+        except Exception:
+            pass
+
+    def set_tr_enabled(enabled: bool) -> None:
+        _set_button_enabled(tr, tr_cb, enabled)
+    def set_mute_enabled(enabled: bool) -> None:
+        _set_button_enabled(mute, mute_cb, enabled)
+    def set_split_enabled(enabled: bool) -> None:
+        _set_button_enabled(split, split_cb, enabled)
+    def set_tune_enabled(enabled: bool) -> None:
+        _set_button_enabled(tune, tune_cb, enabled)
+
+    # wire checkboxes to helpers
+    try:
+        tr_cb.stateChanged.connect(lambda s: set_tr_enabled(s == 2))
+        mute_cb.stateChanged.connect(lambda s: set_mute_enabled(s == 2))
+        split_cb.stateChanged.connect(lambda s: set_split_enabled(s == 2))
+        tune_cb.stateChanged.connect(lambda s: set_tune_enabled(s == 2))
+    except Exception:
+        pass
+
+    # add to layout (checkbox then button for each)
+    btn_row.addWidget(tr_cb)
     btn_row.addWidget(tr)
+    btn_row.addWidget(mute_cb)
     btn_row.addWidget(mute)
+    btn_row.addWidget(split_cb)
     btn_row.addWidget(split)
+    btn_row.addWidget(tune_cb)
     btn_row.addWidget(tune)
+
+    # expose APIs
+    setattr(win, 'set_tr_enabled', set_tr_enabled)
+    setattr(win, 'set_mute_enabled', set_mute_enabled)
+    setattr(win, 'set_split_enabled', set_split_enabled)
+    setattr(win, 'set_tune_enabled', set_tune_enabled)
 
     # Override button actions: disconnect any existing handlers and replace with simple console log
     def _bind_simple(btn_obj, name: str):
