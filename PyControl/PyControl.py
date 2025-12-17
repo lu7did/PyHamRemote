@@ -35,9 +35,11 @@ import argparse
 import importlib.util
 from typing import Any
 
+
 try:
    import pythoncom
    import win32com.client
+   omni=None
 except:
    print("Not a Win32 environment, dependencies not satisfied, only GUI evaluation mode")
 
@@ -75,6 +77,8 @@ if linux_flag:
         # register both package and submodule
         sys.modules['win32com'] = winmod
         sys.modules['win32com.client'] = clientmod
+
+
 else:
     # do not inject dummies; allow real win32com/pythoncom to be used on Windows
     pass
@@ -122,49 +126,30 @@ class OmniRigEvents:
         if linux_flag:
            return
         try:
-            rig = self.win.omni.Rig1 if RigNumber == 1 else self.win.omni.Rig2
+            rig = omni.Rig1 if RigNumber == 1 else omni.Rig2
             # Get_StatusStr es una propiedad del RigX
             status = rig.StatusStr
             print(f"[EVENT] StatusChangeEvent: rig={RigNumber}, status='{status}'",flush=True)
             if status=="On-line":
-               self.win.ready_led.set_on(True)
-               self.win.ready_label.setText("Online")
-               #rigName=rig.RigName
-               if RigNumber==1:
-                  self.win.ready_rig_label.setText(f"({self.win.omni.Rig1.RigType})")
-               else:
-                  self.win.ready_rig_label.setText(f"({self.win.omni.Rig2.RigType})")
+               print(f"[EVENT] OnStatusChange: rig={RigNumber} Freq({rig.Freq}) Mode({getMode(rig.Mode)})", flush=True)
             else:
-               self.win.ready_led.set_on(False)
-               self.win.ready_label.setText("Offline")
-               self.win.ready_rig_label.setText("")
+               print(f"{RigNumber} Offline")
         except Exception as e:
             print(f"[EVENT] StatusChangeEvent: rig={RigNumber}, error leyendo estado: {e}",flush=True)
         if mutex==True:
            mutex=False
-    # Se llamará cuando cambien parámetros (frecuencia, modo, etc.)
+   # Call when frequency, mode or other parameter has been changed
    def OnParamsChange(self, RigNumber,e):
-        global linux_flag
+
+        global linux_flag,omni
         if linux_flag:
            return
         try:
-            rig = self.win.omni.Rig1 if RigNumber == 1 else self.win.omni.Rig2
-            freq = rig.Freq
-            mode = rig.Mode
-            if RigNumber==1:
-               self.win.rig1_freq_label.setText(f"{freq/1e6:.3f} MHz")
-               self.win.rig1_vfo_label.setText(str(rig.Vfo))
-               
-               #self.win.rig1_vfo_label.setText(f"{getMode(mode)}")
-            else:
-               self.win.rig2_freq_label.setText(f"{freq/1e6:.3f} MHz")
-               self.win.rig2_vfo_label.setText(str(rig.Vfo))
-                  
-            #print(f"[EVENT] ParamsChangeEvent: rig={RigNumber}, freq={freq}, mode={mode}", flush=True)
+            rig = omni.Rig1 if RigNumber == 1 else omni.Rig2
+            print(f"[EVENT] ParamsChangeEvent: rig={RigNumber} param:{e:08x} Freq({rig.Freq}) Mode({getMode(rig.Mode)})", flush=True)
+
         except Exception as e:
-            print(f"[EVENT] ParamsChangeEvent: rig={RigNumber}, error leyendo params: {e}", flush=True)
-               
-        
+            print(f"[EVENT] ParamsChangeEvent: rig={RigNumber}, error leyendo params: {e:08x}", flush=True)
 
 
 # Locate the PyMeter.py file in the repository (assumes script lives in PyControl/)
@@ -191,24 +176,18 @@ SwapButton = getattr(_pym, 'SwapButton')
 
 
 def build_window(debug: bool = False) -> QWidget:
-    global linux_flag
+    global linux_flag,omni
+
+
+
     # ----------------------------------------------------------------------
     # Creates COM object to handle interaction with OmniRig
     # ----------------------------------------------------------------------
-    if linux_flag:
-        print("Running on non-Windows environment, GUI evaluation only")
-    else:
-        
-        pythoncom.CoInitialize()
-        self.omni = win32com.client.DispatchWithEvents("OmniRig.OmniRigX", OmniRigEvents)
-        
-        #* DEBUG Make Settings window visible --- self.omni.DialogVisible=Tru
-        OmniRigEvents.win=self
-        
-        self.rig1 = self.omni.Rig1
-        self.rig2 = self.omni.Rig2
-        
-
+    pythoncom.CoInitialize()
+    omni = win32com.client.DispatchWithEvents("OmniRig.OmniRigX", OmniRigEvents)
+    rig1 = omni.Rig1
+    rig2 = omni.Rig2
+    print(f"Initialized OmniRig rig1({omni.Rig1.RigType}) rig2({omni.Rig2.RigType})")
 
 
 
@@ -1140,6 +1119,65 @@ def main(argv: list[str] | None = None) -> int:
         win._test_timer = timer
 
     return app.exec()
+
+
+
+#*------------------------------------------------------------------------------------
+#* Set Mode
+#*------------------------------------------------------------------------------------
+
+def setMode(rig,mStr):
+  if mStr == "CW-U" or mStr == "CW":
+     rig.Mode =0x00800000
+     return
+  if mStr == "CW-L":
+     rig.Mode =0x01000000
+     return
+  if mStr == "USB":
+     rig.Mode =0x02000000
+     return
+  if mStr == "LSB":
+     rig.Mode =0x04000000
+     return
+  if mStr == "DIG-U":
+     rig.Mode =0x08000000
+     return
+  if mStr == "DIG-L":
+     rig.Mode =0x10000000
+     return
+  if mStr == "AM":
+     rig.Mode =0x20000000
+     return
+  if mStr == "FM":
+     rig.Mode =0x40000000
+     return
+  print(f"ERROR. Mode {mStr} not valida. Ignored")
+#*------------------------------------------------------------------------------------
+#* Translate mode coding into actual strings
+#*------------------------------------------------------------------------------------
+def getMode(m):
+
+  padding = 6
+  mode = m & 0xfff00000
+  #print(f"Recibio m({m:#0{padding}x}) mode({mode:#0{padding}x})  ") 
+  if mode == 0x00800000:
+     return "CW-U"
+  if mode == 0x01000000:
+     return "CW-L"
+  if mode == 0x02000000:
+     return "USB"
+  if mode == 0x04000000:
+     return "LSB"
+  if mode == 0x08000000:
+     return "DIG-U"
+  if mode == 0x10000000:
+     return "DIG-L"
+  if mode == 0x20000000:
+     return "AM"
+  if mode == 0x40000000:
+     return "FM"
+  return "???"
+
 
 
 if __name__ == '__main__':
