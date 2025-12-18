@@ -131,18 +131,24 @@ class VUMeter(QWidget):
         return QSize((self._led_diameter + 2) * self._segments + 16, self._led_diameter + 20)
 
     def set_value(self, value: int) -> None:
-        """Set meter value as number of lit segments (1..segments) and refresh display.
+        """Set meter value in 0..255 and refresh display.
 
-        The meter now expects an integer indicating how many LEDs should be lit
-        (1 = first LED, segments = all LEDs). Values outside 1..segments are ignored.
+        Behavior:
+        - Values < 0 are treated as 0.
+        - Values > 255 are treated as 255.
+        - 0 -> no LED lit, 255 -> all LEDs lit.
+        - Intermediate values light LEDs proportionally: one extra LED per ~17 units
+          when there are 15 LEDs (generalized for other segment counts).
         """
         try:
             v = int(value)
         except Exception:
             return
-        # enforce requested constraint: only accept values > 0 and <= segments
-        if v <= 0 or v > self._segments:
-            return
+        # clamp to 0..255
+        if v < 0:
+            v = 0
+        elif v > 255:
+            v = 255
         if v != self._value:
             self._value = v
             self.update()
@@ -160,8 +166,16 @@ class VUMeter(QWidget):
         start_x = 4
         # vertically center LEDs
         y = int((h - d) / 2)
-        # _value now represents number of lit segments directly
-        lit_count = int(max(0, min(self._segments, int(self._value))))
+        # map 0..255 to number of lit segments (0..self._segments)
+        try:
+            bucket = 255.0 / float(self._segments)
+            lit_count = int(self._value / bucket)
+        except Exception:
+            lit_count = int(max(0, min(self._segments, int(self._value))))
+        # ensure bounds and ensure 255 maps to full segments
+        if self._value >= 255:
+            lit_count = self._segments
+        lit_count = max(0, min(self._segments, lit_count))
 
         for i in range(self._segments):
             x = start_x + i * (d + gap)
