@@ -1480,31 +1480,36 @@ def main(argv: list[str] | None = None) -> int:
     if args.test:
         from PyQt5.QtCore import QTimer
 
-        # animate number of lit segments from 1..meter._segments
-        val = 1
+        # animate lit segments from 0..meter._segments each second (ascending then descending)
+        seg = 0
         direction = 1
 
         def tick() -> None:
-            nonlocal val, direction
+            nonlocal seg, direction
             try:
                 max_seg = getattr(win, 'meter')._segments
             except Exception:
                 max_seg = 15
-            val += 1 * direction
-            if val >= max_seg:
-                val = max_seg
+            seg += 1 * direction
+            if seg >= max_seg:
+                seg = max_seg
                 direction = -1
-            elif val <= 1:
-                val = 1
+            elif seg <= 0:
+                seg = 0
                 direction = 1
             try:
-                win.set_meter(val)
+                # map segment count to value 0..255 so meter lighting follows mapping
+                if seg >= max_seg:
+                    v = 255
+                else:
+                    v = int(round(seg * (255.0 / float(max_seg))))
+                win.set_meter(v)
             except Exception:
                 pass
 
         timer = QTimer()
         timer.timeout.connect(tick)
-        timer.start(250)
+        timer.start(1000)
         win._test_timer = timer
 
     return app.exec()
