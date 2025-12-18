@@ -642,7 +642,7 @@ def build_window(debug: bool = False) -> QWidget:
 
     # meter row: meter at left, mode selector at right
     meter_row = QHBoxLayout()
-    meter = VUMeter(segments=10)
+    meter = VUMeter(segments=15)
     meter.setContentsMargins(0, 0, 0, 2)
     meter_row.addWidget(meter)
     meter_row.addStretch()
