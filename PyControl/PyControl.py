@@ -984,14 +984,17 @@ def build_window(debug: bool = False) -> QWidget:
     rb_swr = QRadioButton('SWR')
     rb_power = QRadioButton('Power')
     rb_signal = QRadioButton('Signal')
+    rb_none = QRadioButton('None')
     left_group = QButtonGroup(left_box)
     left_group.addButton(rb_swr)
     left_group.addButton(rb_power)
     left_group.addButton(rb_signal)
+    left_group.addButton(rb_none)
     rb_signal.setChecked(True)
     left_layout.addWidget(rb_swr)
     left_layout.addWidget(rb_power)
     left_layout.addWidget(rb_signal)
+    left_layout.addWidget(rb_none)
     left_box.setLayout(left_layout)
 
     def _on_left_changed(button) -> None:
@@ -1083,7 +1086,7 @@ def build_window(debug: bool = False) -> QWidget:
     def set_left_enabled(enabled: bool) -> None:
         try:
             en = bool(enabled)
-            for b in (rb_swr, rb_power, rb_signal):
+            for b in (rb_swr, rb_power, rb_signal, rb_none):
                 b.setEnabled(en)
                 b.setStyleSheet("" if en else "color: #888888;")
             left_enable_cb.setChecked(en)
@@ -1145,7 +1148,7 @@ def build_window(debug: bool = False) -> QWidget:
         rig2_radio.blockSignals(False)
         # left group
         left_val = cfg.get('LEFT', 'Signal')
-        for b in (rb_swr, rb_power, rb_signal):
+        for b in (rb_swr, rb_power, rb_signal, rb_none):
             b.blockSignals(True)
             if b.text() == left_val:
                 b.setChecked(True)
