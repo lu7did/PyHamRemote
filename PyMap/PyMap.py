@@ -25,12 +25,10 @@ import re
 import sys
 from typing import Set
 import csv
-
 import time
 import matplotlib.pyplot as plt
 import numpy as np
 from mpl_toolkits.basemap import Basemap
-
 import datetime
 import zipfile
 import os
@@ -38,11 +36,9 @@ import glob
 import tempfile
 import shutil
 import subprocess
-
 import imageio.v2 as imageio
 from collections import defaultdict
 import json
-
 import maidenhead as mh
 from geopy.geocoders import Nominatim
 from pycountry_convert import country_alpha2_to_continent_code, convert_continent_code_to_continent_name
@@ -51,14 +47,249 @@ import getopt
 import sys
 import argparse
 from pyhamtools import LookupLib, Callinfo
+from collections import defaultdict
+from typing import List, Dict, Any
+import datetime
+from typing import List, Dict, Any
 
-# Pool of connected telnet clients connected
+# Pool of connected telnet clients connected and other global variables
+
 connected_clients: Set[asyncio.StreamWriter] = set()
 clients_lock = asyncio.Lock()
 my_lookuplib = LookupLib(lookuptype="countryfile")
 cic = Callinfo(my_lookuplib)
 map=None
-#plt.ion()
+path=None
+persist=3
+modeGraph="SHADED"
+
+class Rutas:
+    def __init__(self) -> None:
+        self._registros: List[Dict[str, Any]] = []
+        self._resumen: List[Dict[str, Any]] = []
+        self._posicion: int = 0
+
+    # -------------------------------------------------
+    # Add a new register
+    # -------------------------------------------------
+    def add(
+        self,
+        pais_origen: str,
+        pais_destino: str,
+        latitud_origen: float,
+        longitud_origen: float,
+        latitud_destino: float,
+        longitud_destino: float,
+        dia: int,
+        mes: int,
+        anio: int,
+        hora: int,
+        minuto: int,
+        segundo: int,
+    ) -> None:
+        """
+        Add a new register to an internal list (dict) structure.
+        """
+        self._registros.append(
+            {
+                "pais_origen": pais_origen,
+                "pais_destino": pais_destino,
+                "latitud_origen": latitud_origen,
+                "longitud_origen": longitud_origen,
+                "latitud_destino": latitud_destino,
+                "longitud_destino": longitud_destino,
+                "dia": dia,
+                "mes": mes,
+                "anio": anio,
+                "hora": hora,
+                "minuto": minuto,
+                "segundo": segundo,
+            }
+        )
+
+    # -------------------------------------------------
+    # clear the list
+    # -------------------------------------------------
+    def clear(self) -> None:
+        """
+        Borra todos los registros y resetea el estado interno.
+        """
+        self._registros.clear()
+        self._resumen.clear()
+        self._posicion = 0
+
+    # ---------------------------
+    # Count country to country paths, creates a summary list
+    # ---------------------------
+    def count(self) -> List[Dict[str, Any]]:
+
+        contador = defaultdict(int)
+        primeros_datos: Dict[tuple, Dict[str, Any]] = {}
+
+        for r in self._registros:
+            # Take country tuples in any order
+
+            clave = tuple(sorted([r["pais_origen"], r["pais_destino"]]))
+            contador[clave] += 1
+
+            # First record
+
+            if clave not in primeros_datos:
+                primeros_datos[clave] = {
+                    "latitud_origen": r["latitud_origen"],
+                    "longitud_origen": r["longitud_origen"],
+                    "latitud_destino": r["latitud_destino"],
+                    "longitud_destino": r["longitud_destino"],
+                    "dia": r["dia"],
+                    "mes": r["mes"],
+                    "anio": r["anio"],
+                    "hora": r["hora"],
+                    "minuto": r["minuto"],
+                    "segundo": r["segundo"],
+                }
+
+        resumen: List[Dict[str, Any]] = []
+
+        for clave, cant in contador.items():
+            po, pd = clave
+            datos = primeros_datos[clave]
+
+            resumen.append(
+                {
+                    "pais_1": po,
+                    "pais_2": pd,
+                    "cantidad": cant,
+                    "latitud_origen": datos["latitud_origen"],
+                    "longitud_origen": datos["longitud_origen"],
+                    "latitud_destino": datos["latitud_destino"],
+                    "longitud_destino": datos["longitud_destino"],
+                    "dia": datos["dia"],
+                    "mes": datos["mes"],
+                    "anio": datos["anio"],
+                    "hora": datos["hora"],
+                    "minuto": datos["minuto"],
+                    "segundo": datos["segundo"],
+                }
+            )
+
+        # sort from greater to lower by quantity of spots in the period
+
+        resumen.sort(key=lambda x: x["cantidad"], reverse=True)
+        return resumen
+
+    # Alias to count()
+
+    def list(self) -> List[Dict[str, Any]]:
+        return self.count()
+
+    # ---------------------------
+    # Ordered list by timestamp
+    # ---------------------------
+    def print(self) -> List[Dict[str, Any]]:
+
+        return sorted(
+            self._registros,
+            key=lambda r: (
+                r["anio"],
+                r["mes"],
+                r["dia"],
+                r["hora"],
+                r["minuto"],
+                r["segundo"],
+            ),
+        )
+
+    # ---------------------------
+    # Orderly recovery of list
+    # ---------------------------
+    def get(self):
+
+        self._resumen = self.count()
+        self._posicion = 0
+
+        if not self._resumen:
+            return "", "", 0, 0.0, 0.0, 0.0, 0.0, 0, 0, 0, 0, 0, 0
+
+        elem = self._resumen[self._posicion]
+        self._posicion += 1
+
+        return (
+            elem["pais_1"],
+            elem["pais_2"],
+            elem["cantidad"],
+            elem["latitud_origen"],
+            elem["longitud_origen"],
+            elem["latitud_destino"],
+            elem["longitud_destino"],
+            elem["dia"],
+            elem["mes"],
+            elem["anio"],
+            elem["hora"],
+            elem["minuto"],
+            elem["segundo"],
+        )
+
+    def next(self):
+        """
+        Devuelve los elementos subsiguientes de la lista resumen.
+        Cuando no hay más elementos, devuelve:
+          "", "", 0, 0.0, 0.0, 0.0, 0.0, 0, 0, 0, 0, 0, 0
+        """
+        if self._posicion >= len(self._resumen):
+            return "", "", 0, 0.0, 0.0, 0.0, 0.0, 0, 0, 0, 0, 0, 0
+
+        elem = self._resumen[self._posicion]
+        self._posicion += 1
+
+        return (
+            elem["pais_1"],
+            elem["pais_2"],
+            elem["cantidad"],
+            elem["latitud_origen"],
+            elem["longitud_origen"],
+            elem["latitud_destino"],
+            elem["longitud_destino"],
+            elem["dia"],
+            elem["mes"],
+            elem["anio"],
+            elem["hora"],
+            elem["minuto"],
+            elem["segundo"],
+        )
+
+    # ---------------------------
+    # Purge spots older than persistence in minutes
+    # ---------------------------
+    def purge(self, minutos: int) -> None:
+
+        now = datetime.datetime.now()
+        limite = datetime.timedelta(minutes=minutos)
+
+        nueva_lista: List[Dict[str, Any]] = []
+
+        for r in self._registros:
+            try:
+                ts = datetime.datetime(
+                    r["anio"],
+                    r["mes"],
+                    r["dia"],
+                    r["hora"],
+                    r["minuto"],
+                    r["segundo"],
+                )
+            except ValueError:
+                continue
+
+            diferencia = now - ts
+
+            if diferencia <= limite:
+                nueva_lista.append(r)
+
+        self._registros = nueva_lista
+
+
+#*-----------------------------------------------------------------------------
+#*                    Local telnet client handler
 #*-----------------------------------------------------------------------------
 async def handle_local_client(reader: asyncio.StreamReader,
                               writer: asyncio.StreamWriter) -> None:
@@ -93,7 +324,9 @@ async def handle_local_client(reader: asyncio.StreamReader,
             pass
         print(f"[LOCAL] Client disconnected {peername}", file=sys.stderr)
 
-
+#*---------------------------------------------------------------------------------------------------------------
+#* Change frequency to band
+#*---------------------------------------------------------------------------------------------------------------
 def freq2band(freq):
 
     f=int(float(freq))
@@ -124,7 +357,9 @@ def freq2band(freq):
          return "160m"
     except:
          return 0  
-
+#*-------------------------------------------------------------------------------------------------------------
+#* Repeat spots to all connected Telnet clients
+#*-------------------------------------------------------------------------------------------------------------
 async def broadcast_to_clients(message: str) -> None:
     """
     message is broadcasted to all connected clients
@@ -156,7 +391,9 @@ async def broadcast_to_clients(message: str) -> None:
             except Exception:
                 pass
 
-
+#*-------------------------------------------------------------------------------------------------------------------
+#* Parse the DX spot into their fields
+#*-------------------------------------------------------------------------------------------------------------------
 def parse_dx_line(line: str):
     """
     Parsed the line from the cluster:
@@ -182,30 +419,10 @@ def parse_dx_line(line: str):
     return from_, freq, callsign, mode,speed,snr,activity,timestamp
 
 
-
-
-
-#*------------------------------------------------------------------------------------------------------
-#* Transform band into a line of a pre-defined colour
-#*------------------------------------------------------------------------------------------------------
-def band2color(band):
-    
-    match band:
-        case "40m":
-            return 'c' 
-        case "20m":   
-            return 'y'  
-        case "15m":
-            return 'g'
-        case "10m":
-            return 'm'
-        case _:
-            return 'c'
-
-
 #*------------------------------------------------------------------------------------------------------
 #* Build a map (Mercator projection)
 #*------------------------------------------------------------------------------------------------------
+
 def buildMap():
     m = Basemap(projection='merc',llcrnrlon=-170,llcrnrlat=-75,urcrnrlon=170,urcrnrlat=75,resolution='l')
     m.drawmeridians(np.arange(0,360,30))
@@ -214,7 +431,89 @@ def buildMap():
     m.drawcountries(linewidth=0.25)
     return m
 
+#*-----------------------------------------------------------------------------------------------------
+#* draw the world map for a given timestamp
+#*----------------------------------------------------------------------------------------------------
+def drawMap(yy,mm,dd,h,m,band,filter_callsign):
+    global modeGraph
 
+    plt.clf()
+    map=buildMap();
+    f = datetime.datetime(yy,mm,dd,h,0,0)
+    CS=map.nightshade(f)
+    modeGIF=modeGraph
+
+    if (modeGIF=="SHADED"):
+       map.shadedrelief(scale=0.1)
+    else:
+       map.bluemarble(scale=0.1)
+
+    title=f"PyMap {dd:0{2}d}-{mm:0{2}d}-{yy}  {h:0{2}d}:{m:0{2}d}\n Band({band}) Filter({filter_callsign})"
+    plt.title(title)
+    return map
+
+#*------------------------------------------------------------------------------------------------------
+#* get Current Time
+#*------------------------------------------------------------------------------------------------------
+def getTime():
+
+    from datetime import datetime, date
+    now   = datetime.now()
+    fdate = now.strftime("%Y-%m-%d")
+    ftime = now.strftime("%H:%M:%S")
+
+    yy=int(fdate.split("-")[0])    #
+    mm=int(fdate.split("-")[1])    #
+    dd=int(fdate.split("-")[2])    #
+    h=int(ftime.split(":")[0])     #
+    m=int(ftime.split(":")[1])     #
+
+    return yy,mm,dd,h,m
+
+#*------------------------------------------------------------------------------------------------------
+#* Walk the (purged) structure of spots and draw the paths
+#*------------------------------------------------------------------------------------------------------
+def walkPath(path,map):
+
+     from datetime import datetime, timedelta
+     now = datetime.now()
+     r="b"
+
+     countryFrom, countryTo, cant,  latFrom, lonFrom, latTo, lonTo,  dia, mes, anio, hora, min, seg = path.get()
+
+     while countryFrom != "": 
+
+         lat = [latFrom,latTo]
+         lon = [lonFrom,lonTo]
+         x,y = map(lon, lat)
+
+         spot_timestamp = datetime(anio,mes,dia, hora, min, seg)
+
+         time_difference = spot_timestamp - now
+         tsecs = time_difference.total_seconds()
+         dmin = int(tsecs // 60)
+         dmin = abs(dmin)
+
+         if dmin <= 2:
+            r="tomato"
+         if dmin == 3:
+            r="cyan"
+         if dmin == 4:
+            r="blue"
+         if dmin >= 5:
+            r="gray"
+
+         map.plot(x, y, 'o-', color=r,markersize=1, linewidth=1)
+         plt.show(block=False)
+         #plt.pause(0.001)
+
+         # Obtener siguiente
+         (countryFrom, countryTo, cant, latFrom, lonFrom, latTo, lonTo, dia, mes, anio, hora, min, seg) = path.next()
+
+
+#*------------------------------------------------------------------------------------------------------
+#* Connect to the cluster telnet server and handles the spots
+#*------------------------------------------------------------------------------------------------------
 async def remote_client_task(host: str,
                              port: int,
                              keyword: str,
@@ -228,7 +527,7 @@ async def remote_client_task(host: str,
     - Wait till keyword and send challenge response.
     - Then the spot streams are processed
     """
-    global my_lookuplib,cic,map
+    global my_lookuplib,cic,map,path,persist
 
 
     print(f"[REMOTE] Connecting to {host}:{port} ...", file=sys.stderr)
@@ -260,10 +559,28 @@ async def remote_client_task(host: str,
 
     print("[REMOTE] Handshake completed, processing spots ...", file=sys.stderr)
 
+
+    # Create structure to held one minute worth of location spots
+
+    mant=-1
+    path=Rutas()
+
+
     # Main loop receive, process and filter spots
 
     try:
         while True:
+
+            #*--- Check if a new minute has elapsed
+
+            yy,mm,dd,h,m = getTime()
+            if m != mant:
+               mant=m
+               map=drawMap(yy,mm,dd,h,m,band,filter_callsign)
+               path.purge(persist)
+               walkPath(path,map)
+
+
             data = await reader.readline()
             if not data:
                 print("[REMOTE] Remote connection closed.", file=sys.stderr)
@@ -297,7 +614,6 @@ async def remote_client_task(host: str,
                 continue
 
 
-            #cl=f"{filter_callsign}"
             cl=f"{callsign.upper()}"
             cl=cl.replace("#","")
             cl=cl.ljust(13)
@@ -309,8 +625,11 @@ async def remote_client_task(host: str,
             msg=f"{mode} {snr} {speed} CQ "
             msg=msg.ljust(31)
             newline=f"{spot}{f}  {cl}{msg}{timestamp}" 
-            print(newline,end="\n")
 
+            print(newline,end="\n")
+            #*--------------------------------------------------------------------------------
+            #* Retrieve Lat/Long coordinates to draw on the map
+            #*--------------------------------------------------------------------------------
             try:
                o=cic.get_all(cluster.upper())
                z=cic.get_all(callsign.upper())
@@ -327,12 +646,26 @@ async def remote_client_task(host: str,
             lat = [laFrom,laTo]
             lon = [loFrom,loTo]
 
-            r=band2color(band)
+            countryFrom=o['country']
+            countryTo=z['country']
+
+            cqzFrom=o['cqz']
+            cqzTo=z['cqz']
+
+            ituzFrom=o['ituz']
+            ituzTo=z['ituz']
+
+            continentFrom=o['continent']
+            continentTo=z['continent']
+
+
+            r="r"
 
             x,y = map(lon, lat)
-            map.plot(x, y, 'o-', color=r,markersize=1, linewidth=1)
+            map.plot(x, y, 'o-', color=r,markersize=1, linewidth=1) #*--- Store the fresh spot, always in red
             plt.show(block=False)
             plt.pause(0.001)
+            path.add(countryFrom,countryTo,laFrom,loFrom,laTo,loTo,dd,mm,yy,h,m,0)
 
             await broadcast_to_clients(newline)
 
@@ -346,10 +679,13 @@ async def remote_client_task(host: str,
             pass
         print("[REMOTE] Cliente remoto finalizado.", file=sys.stderr)
 
-
+#*-----------------------------------------------------------------------------------------------------------
+#* Start internal servers and clients
+#*-----------------------------------------------------------------------------------------------------------
 async def main_async(args):
     # Start the local telnet server
-    global map
+    global map,persist,modeGraph
+
     server = await asyncio.start_server(
         handle_local_client,
         host="0.0.0.0",
@@ -374,32 +710,18 @@ async def main_async(args):
             band=args.band,
         )
     )
-    date="2025-12-20"
-    yy=int(date.split("-")[0])
-    mm=int(date.split("-")[1])
-    dd=int(date.split("-")[2])
-    h=22
 
 
-    map=buildMap();
-    f = datetime.datetime(yy,mm,dd,h,0,0)
-    CS=map.nightshade(f)
-    modeGIF="SHADED"
-    if (modeGIF=="SHADED"):
-       map.shadedrelief(scale=0.1)
-    else:
-       map.bluemarble(scale=0.1)
+    #*--------------------------------------------------------------------------------------------------
+    #* Initially draw the map
+    #*--------------------------------------------------------------------------------------------------
 
-    title="PyMap"
-    plt.title(title)
-    if len(str(h)) == 1:
-       stHour="0"+str(h)
-    else:
-       stHour=str(h)
-    #plt.close("all")
+    yy,mm,dd,h,m = getTime()
+    map=drawMap(yy,mm,dd,h,m,args.band,args.filter_callsign)
 
 
     # While connected to the cluster accept local telnet connections.
+
     try:
         async with server:
             await remote_task  # wait for remote
@@ -416,6 +738,9 @@ async def main_async(args):
             connected_clients.clear()
         print("[MAIN] Terminando.", file=sys.stderr)
 
+#*--------------------------------------------------------------------------------------------------
+#* Initially draw the map
+#*--------------------------------------------------------------------------------------------------
 
 def parse_args():
     parser = argparse.ArgumentParser(
@@ -452,10 +777,21 @@ def parse_args():
         help="Local telnet server port"
     )
     parser.add_argument(
+        "--persist",
+        type=int,
+        help="Persistence of the spot on the map"
+    )
+    parser.add_argument(
         "-B", "--band",
         type=str,
         required=True,
         help="Band to filter"
+    )
+    parser.add_argument(
+        "--graph",
+        type=str,
+        default="SHADED",
+        help="Map type (SHADED or not)"
     )
     parser.add_argument(
         "-f", "--filter-callsign",
