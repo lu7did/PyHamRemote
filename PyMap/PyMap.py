@@ -1,5 +1,3 @@
-
-
 #!/usr/bin/env python3
 #*--------------------------------------------------------------------------------------
 #* PyMap
@@ -62,7 +60,10 @@ map=None
 path=None
 persist=3
 modeGraph="SHADED"
-
+#*----------------------------------------------------------------------------------------------------------------
+#* This class stores and manages the list of spots for the previous {persist} minutes, it is used to draw
+#* the outstanding spots from the last period
+#*----------------------------------------------------------------------------------------------------------------
 class Rutas:
     def __init__(self) -> None:
         self._registros: List[Dict[str, Any]] = []
@@ -435,12 +436,20 @@ def buildMap():
 #* draw the world map for a given timestamp
 #*----------------------------------------------------------------------------------------------------
 def drawMap(yy,mm,dd,h,m,band,filter_callsign):
+    from datetime import datetime, timezone
+    import time # For getting system local time implicitly
+
     global modeGraph
 
     plt.clf()
+
     map=buildMap();
-    f = datetime.datetime(yy,mm,dd,h,0,0)
-    CS=map.nightshade(f)
+    #f = datetime(yy,mm,dd,h,0,0)
+
+    f=datetime.now()
+    utc_dt = f.astimezone(timezone.utc)
+
+    CS=map.nightshade(utc_dt)
     modeGIF=modeGraph
 
     if (modeGIF=="SHADED"):
@@ -493,16 +502,7 @@ def walkPath(path,map):
          tsecs = time_difference.total_seconds()
          dmin = int(tsecs // 60)
          dmin = abs(dmin)
-
-         if dmin <= 2:
-            r="tomato"
-         if dmin == 3:
-            r="cyan"
-         if dmin == 4:
-            r="blue"
-         if dmin >= 5:
-            r="gray"
-
+         r="blue"
          map.plot(x, y, 'o-', color=r,markersize=1, linewidth=1)
          plt.show(block=False)
          #plt.pause(0.001)
@@ -587,7 +587,9 @@ async def remote_client_task(host: str,
                 break
 
             line = data.decode(errors="ignore").rstrip("\r\n")
+
             # Parse spot 
+
             parsed = parse_dx_line(line)
             if not parsed:
                 # Irrelevant line, ignore it
@@ -608,6 +610,7 @@ async def remote_client_task(host: str,
                continue
 
             # Filter callsign
+
             if filter_callsign != "*" and callsign.upper() != filter_callsign.upper():
                 plt.show(block=False)
                 plt.pause(0.001)
@@ -621,15 +624,16 @@ async def remote_client_task(host: str,
             snr=f"{snr} dB"
             speed=speed.rjust(2)
             speed=f"{speed} WPM"
-            #msg=f"{mode} {snr} {speed} CQ {cluster}-#"
             msg=f"{mode} {snr} {speed} CQ "
             msg=msg.ljust(31)
             newline=f"{spot}{f}  {cl}{msg}{timestamp}" 
 
             print(newline,end="\n")
+
             #*--------------------------------------------------------------------------------
             #* Retrieve Lat/Long coordinates to draw on the map
             #*--------------------------------------------------------------------------------
+
             try:
                o=cic.get_all(cluster.upper())
                z=cic.get_all(callsign.upper())
@@ -663,8 +667,10 @@ async def remote_client_task(host: str,
 
             x,y = map(lon, lat)
             map.plot(x, y, 'o-', color=r,markersize=1, linewidth=1) #*--- Store the fresh spot, always in red
+
             plt.show(block=False)
             plt.pause(0.001)
+
             path.add(countryFrom,countryTo,laFrom,loFrom,laTo,loTo,dd,mm,yy,h,m,0)
 
             await broadcast_to_clients(newline)
@@ -683,7 +689,9 @@ async def remote_client_task(host: str,
 #* Start internal servers and clients
 #*-----------------------------------------------------------------------------------------------------------
 async def main_async(args):
+
     # Start the local telnet server
+
     global map,persist,modeGraph
 
     server = await asyncio.start_server(
@@ -698,7 +706,9 @@ async def main_async(args):
         print(f"[LOCAL] Servidor Telnet escuchando en {addr}", file=sys.stderr)
 
     print(f"Connection arguments remote({args.remote_host}:{args.remote_port}) keyword({args.keyword}) response({args.response}) filter({args.filter_callsign}) init({args.init_string})")
+
     # Start the connection with the remote cluster telnet server
+
     remote_task = asyncio.create_task(
         remote_client_task(
             host=args.remote_host,
@@ -710,7 +720,6 @@ async def main_async(args):
             band=args.band,
         )
     )
-
 
     #*--------------------------------------------------------------------------------------------------
     #* Initially draw the map
@@ -736,7 +745,7 @@ async def main_async(args):
                 except Exception:
                     pass
             connected_clients.clear()
-        print("[MAIN] Terminando.", file=sys.stderr)
+        print("[MAIN] Ending.", file=sys.stderr)
 
 #*--------------------------------------------------------------------------------------------------
 #* Initially draw the map
@@ -748,7 +757,6 @@ def parse_args():
             "DX Spot filters. Filter spots looking for a callsign and re-spot as local server"
         )
     )
-
     parser.add_argument(
         "-R", "--remote-host",
         required=True,
@@ -770,6 +778,7 @@ def parse_args():
         required=True,
         help="Response to send as the connection challenge"
     )
+
     parser.add_argument(
         "-L", "--listen-port",
         type=int,
@@ -777,21 +786,10 @@ def parse_args():
         help="Local telnet server port"
     )
     parser.add_argument(
-        "--persist",
-        type=int,
-        help="Persistence of the spot on the map"
-    )
-    parser.add_argument(
         "-B", "--band",
         type=str,
         required=True,
         help="Band to filter"
-    )
-    parser.add_argument(
-        "--graph",
-        type=str,
-        default="SHADED",
-        help="Map type (SHADED or not)"
     )
     parser.add_argument(
         "-f", "--filter-callsign",
@@ -801,11 +799,20 @@ def parse_args():
     parser.add_argument(
         "-i", "--init-string",
         default="",
-        help=(
-            "Init string usually the station callsign "
-        ),
+        help="Init string usually the station callsign "
     )
 
+    parser.add_argument(
+        "--persist",
+        type=int,
+        help="Persistence of the spot on the map"
+    )
+    parser.add_argument(
+        "--graph",
+        type=str,
+        default="SHADED",
+        help="Map type (SHADED or not)"
+    )
     return parser.parse_args()
 
 
